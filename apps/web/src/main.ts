@@ -22,7 +22,10 @@ import {
 } from "@pulseling/engine";
 import { PERSONAS, type PersonaId } from "@pulseling/sim/personas";
 import {
+  chat,
+  chatsLeft,
   chooseEvolution,
+  readLetter,
   clearSave,
   currentLoadout,
   condition,
@@ -57,8 +60,9 @@ import {
   VARIANT_NAME,
 } from "./text";
 import "@fontsource/fusion-pixel-12px-proportional-sc";
+import { CHATS_PER_DAY, REPLIES, type ReplyId } from "./talk";
 
-type Tab = "today" | "pet" | "dex" | "battle";
+type Tab = "today" | "pet" | "dex" | "battle" | "data";
 type SliderKey = "steps" | "sleepHours" | "bedtime" | "cardio" | "strength" | "hiit" | "deep";
 interface Sliders { worn: boolean; steps: number; sleepHours: number; bedtime: number; cardio: number; strength: number; hiit: number; deep: number }
 
@@ -121,6 +125,7 @@ let bubble: string | null = null;
 let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 let seenMorning = state?.morning?.date ?? null;
 let paywallHidden = false;
+let openLetter: string | null = null;
 
 const app = document.getElementById("app")!;
 
@@ -136,7 +141,7 @@ function petSpec(pet: PetState, variant: AdultVariant | undefined = pet.adultVar
 
 const wildSpec = (id: string, shiny = false): Omit<SpriteSpec, "frame"> => {
   const sp = ROSTER.find((s) => s.id === id);
-  return { primary: (sp?.type ?? "grass") as ElementType, stage: "wild", shiny };
+  return { primary: (sp?.type ?? "grass") as ElementType, stage: "wild", shiny, seed: id };
 };
 
 function opponentSpec(r: BattleReport, boss: boolean): Omit<SpriteSpec, "frame"> {
@@ -177,6 +182,8 @@ const SHORT_GREETING: Record<PetState["personality"], string> = { genki: "元气
 /** One short line for the watch bubble (about 10 characters). The full sentence lives on the phone. */
 function shortLine(s: GameState): string {
   if (s.trial === "offered") return "zzz……";
+  if (s.pendingShort) return s.pendingShort;
+  if (s.letters[0] && !s.letters[0].read && s.letters[0].date === s.today) return "给你写了封信！";
   const st = status(s);
   if (st.ready && !st.auto) return "我好像要进化了！";
   const m = s.morning;
@@ -192,10 +199,10 @@ function shortLine(s: GameState): string {
   return SHORT_GREETING[s.pet.personality];
 }
 
-/** Something worth a look: evolution waiting for a choice. */
+/** Something worth a look: evolution waiting for a choice, or an unread letter. */
 function needsAttention(s: GameState): boolean {
   const st = status(s);
-  return s.trial !== "offered" && st.ready && !st.auto;
+  return s.trial !== "offered" && ((st.ready && !st.auto) || s.letters.some((l) => !l.read));
 }
 
 function showBubble(text: string) {
@@ -223,6 +230,25 @@ function renderWatch(s: GameState): string {
       ${heart ? '<div class="heart">♥</div>' : ""}
     </div>
     ${asleep ? '<button class="small" data-act="wake">叫醒它</button>' : '<div class="muted" style="font-size:12px">点宠物看它想说什么</div>'}
+    ${renderComplications(s, st)}
+  </div>`;
+}
+
+/** Watch-face complications: what the pet looks like when it lives on someone's watch face. */
+function renderComplications(s: GameState, st: ReturnType<typeof status>): string {
+  const progress = st.threshold ? Math.min(1, st.progress / st.threshold) : 1;
+  const ring = `conic-gradient(#6ee7a0 ${Math.round(progress * 360)}deg, #333 0)`;
+  const head = petSpec(s.pet, undefined, undefined, s.trial === "offered" ? "sleepy" : currentMood(s));
+  return `<div class="complications">
+    <div class="muted" style="font-size:12px">表盘小组件预览</div>
+    <div class="face">
+      <div class="comp-circle" style="background:${ring}"><div class="comp-inner">${canvas(head)}</div></div>
+      <div class="comp-text">
+        <div class="comp-time">${clockNow()}</div>
+        <div class="comp-inline">${needsAttention(s) ? "！" : ""}${shortLine(s)}</div>
+        <div class="comp-corner">${s.pet.stage === "adult" ? "成熟体" : `进化 ${pct(progress)}`}</div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -239,6 +265,10 @@ function renderToday(s: GameState): string {
   const m = s.morning;
   const bossToday = s.boss && s.boss.date === s.today ? s.boss : null;
   return `<div class="stack">
+    ${s.pendingLine ? `<div class="card highlight"><p>${s.pendingLine}</p></div>` : ""}
+    ${s.letters.length ? `<div class="card ${s.letters[0].read ? "" : "highlight"}"><h2>来信 ${s.letters.some((l) => !l.read) ? '<span class="pill">未读</span>' : ""}</h2>
+      ${s.letters.slice(0, 4).map((l) => `<div class="row"><span>${l.date.slice(5)} 的周信</span><button class="small" data-act="letter" data-v="${l.date}">${l.read ? "再看看" : "打开"}</button></div>`).join("")}
+    </div>` : ""}
     <div class="card"><h2>早上开奖</h2>
       ${
         !m
@@ -249,7 +279,20 @@ function renderToday(s: GameState): string {
       }
     </div>
     ${bossToday ? `<div class="card"><h2>周 Boss</h2>${battleSummary(bossToday, true)}</div>` : ""}
+    ${renderChat(s)}
     <div class="card"><h2>动态</h2><ul class="feed">${s.feed.slice(0, 12).map((f) => `<li><span class="muted">${f.date.slice(5)}</span> ${f.text}</li>`).join("")}</ul></div>
+  </div>`;
+}
+
+function renderChat(s: GameState): string {
+  const left = chatsLeft(s);
+  const today = s.chat.log.filter((l) => l.date === s.today);
+  const off = left <= 0 || s.trial === "offered" ? "disabled" : "";
+  return `<div class="card"><h2>跟它说句话 <span class="muted" style="font-size:12px;font-weight:400">今天还能说 ${left}/${CHATS_PER_DAY} 句</span></h2>
+    <div class="chat">${today.map((l) => `<div class="msg ${l.from}">${l.text}</div>`).join("") || '<div class="muted">每天可以跟它说 3 句话。说出口的承诺它会记得，第二天对照你的数据。</div>'}</div>
+    <div class="row" style="margin-top:8px">${REPLIES.map((x) => `<button class="small" data-act="chat" data-v="${x.id}" ${off}>${x.label}</button>`).join("")}</div>
+    ${s.memories.length ? `<h3>它记得的事</h3><ul class="feed">${s.memories.slice(0, 5).map((mm) => `<li><span class="muted">${mm.date.slice(5)}</span> ${mm.text}</li>`).join("")}</ul>` : ""}
+    <p class="muted" style="font-size:12px">原型里是预设回复；正式版用 AI 生成，会结合你的健康数据和记忆。</p>
   </div>`;
 }
 
@@ -304,6 +347,8 @@ function renderPet(s: GameState): string {
     <div class="card"><h2>属性</h2>
       <div class="stats">${STATS.map((k) => `<span>${STAT_NAME[k]}</span><div class="meter"><i style="width:${Math.min(100, (stats[k] / 150) * 100)}%"></i></div><span>${Math.round(stats[k])}</span>`).join("")}</div>
       <p class="muted">状态加成 ×${condition(s).toFixed(2)}（最近 3 天睡得好、动得多会提高，只加不减）</p>
+      <h3>最近 14 天的成长（每天 10–20）</h3>
+      <div class="chart">${s.results.slice(-14).map((x) => `<div class="col" title="${x.date} +${Math.round(x.gain)}"><i style="height:${Math.round((x.gain / 20) * 100)}%"></i><span>${x.date.slice(8)}</span></div>`).join("") || '<span class="muted">还没有数据</span>'}</div>
     </div>
     <div class="card"><h2>稀有度</h2>
       <p>孵化时 <b>${RARITY_NAME[pet.hatchRarity]}</b> → 现在 <b>${RARITY_NAME[pet.rarity]}</b></p>
@@ -375,6 +420,35 @@ function renderDev(s: GameState): string {
   </div>`;
 }
 
+const FIELD_NAME: Record<string, string> = {
+  worn: "戴着手表", steps: "步数", standHours: "站立小时", activeEnergyKcal: "活动能量（千卡）", flightsClimbed: "爬楼层数",
+  sleepMinutes: "睡眠（分钟）", bedtimeMinutes: "入睡时间（相对午夜，分钟）", deepSleepRatio: "深睡比例", nightHrvMs: "夜间 HRV 平均（毫秒）",
+  restingHr: "静息心率", cardioMinutes: "有氧（分钟）", distanceKm: "距离（公里）", strengthMinutes: "力量（分钟）",
+  highIntensityMinutes: "高强度（分钟）", intervalMinutes: "间歇（分钟）", highHrZoneMinutes: "高心率区间（分钟）",
+};
+
+function renderData(s: GameState): string {
+  const last = [...s.history].reverse().find((d) => d.date < s.today);
+  const rows = last ? Object.entries(last).filter(([k]) => k !== "date").map(([k, v]) => `<tr><td>${FIELD_NAME[k] ?? k}</td><td>${typeof v === "number" ? Math.round(v * 100) / 100 : v ? "是" : "否"}</td></tr>`).join("") : "";
+  return `<div class="stack"><div class="card"><h2>我们上传了什么</h2>
+    <p class="muted">这就是每天上传到服务器的全部内容：一行每日汇总。心率明细、睡眠各阶段的原始记录都留在你的手机上，只上传算好的结果；不上传位置。</p>
+    ${last ? `<h3>${last.date} 上传的数据</h3><table class="kv">${rows}</table>` : '<p class="muted">还没有上传过。</p>'}
+    <p class="muted">运动记录还会上传每次一行摘要（类型、开始时间、时长、距离、平均心率），不含 GPS 路线。</p>
+    <button data-act="reset">删除全部数据</button>
+  </div></div>`;
+}
+
+function renderLetter(s: GameState): string {
+  const l = s.letters.find((x) => x.date === openLetter);
+  if (!l) return "";
+  return `<div class="modal-bg"><div class="modal letter">
+    <h2>来自你的 Pulseling · ${l.date.slice(5)}</h2>
+    <div class="row" style="justify-content:center">${canvas(petSpec(s.pet))}</div>
+    <p style="white-space:pre-wrap">${l.text}</p>
+    <div class="row" style="justify-content:flex-end"><button class="small primary" data-act="close-letter">收好</button></div>
+  </div></div>`;
+}
+
 function renderPaywall(s: GameState): string {
   const st = status(s);
   return `<div class="modal-bg"><div class="modal stack" style="text-align:center">
@@ -421,15 +495,16 @@ function render() {
     app.innerHTML = renderStart();
   } else {
     const s = state;
-    const body = { today: renderToday, pet: renderPet, dex: renderDex, battle: renderBattle }[tab](s);
+    const body = { today: renderToday, pet: renderPet, dex: renderDex, battle: renderBattle, data: renderData }[tab](s);
     app.innerHTML = `<div class="top"><h1>Pulseling 原型</h1><span class="muted">第 ${dayNumber(s)} 天</span><span class="spacer"></span>${s.trial === "active" ? '<span class="pill">试用中</span>' : ""}</div>
       <div class="layout">
         ${renderWatch(s)}
-        <div><div class="tabs">${(["today", "pet", "dex", "battle"] as Tab[]).map((t) => `<button class="${tab === t ? "on" : ""}" data-act="tab" data-v="${t}">${{ today: "今天", pet: "宠物", dex: "图鉴", battle: "对战" }[t]}</button>`).join("")}</div>${body}</div>
+        <div><div class="tabs">${(["today", "pet", "dex", "battle", "data"] as Tab[]).map((t) => `<button class="${tab === t ? "on" : ""}" data-act="tab" data-v="${t}">${{ today: "今天", pet: "宠物", dex: "图鉴", battle: "对战", data: "数据" }[t]}</button>`).join("")}</div>${body}</div>
         ${renderDev(s)}
       </div>
       ${s.trial === "offered" && !replay && !paywallHidden ? renderPaywall(s) : ""}
-      ${renderReplay()}`;
+      ${renderReplay()}
+      ${openLetter ? renderLetter(s) : ""}`;
   }
   drawAll();
 }
@@ -489,6 +564,19 @@ app.addEventListener("click", (ev) => {
       return update(setLoadout(state!, next, state!.tactic));
     }
     case "tactic": return update(setLoadout(state!, currentLoadout(state!), v as Tactic));
+    case "chat": {
+      const label = REPLIES.find((x) => x.id === v)?.label ?? v;
+      const next = chat(state!, v as ReplyId, label);
+      update(next);
+      const lastLine = next.chat.log[next.chat.log.length - 1];
+      if (lastLine?.from === "pet" && next !== state) {
+        showBubble(lastLine.text.length > 12 ? lastLine.text.slice(0, 11) + "…" : lastLine.text);
+        render();
+      }
+      return;
+    }
+    case "letter": openLetter = v; return update(readLetter(state!, v));
+    case "close-letter": openLetter = null; return render();
     case "pet-tap": break;
   }
 });

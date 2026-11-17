@@ -67,12 +67,12 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .options { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .option { border: 1px solid var(--line); border-radius: 10px; padding: 8px; text-align: center; font-size: 12px; }
 .option.target { border: 2px solid var(--accent); }
-.option canvas { width: 64px; height: 64px; }
+.option canvas { width: 80px; height: 80px; }
 .silhouette { filter: brightness(0) opacity(0.75); }
 
-.dex { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.dex { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
 .dex .cell { border: 1px solid var(--line); border-radius: 8px; padding: 4px; text-align: center; font-size: 11px; }
-.dex canvas { width: 48px; height: 48px; }
+.dex canvas { width: 80px; height: 80px; }
 
 .feed { margin: 0; padding: 0; list-style: none; font-size: 13px; }
 .feed li { padding: 4px 0; border-bottom: 1px dashed var(--line); }
@@ -83,8 +83,8 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 
 .modal-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; z-index: 10; }
 .modal { background: var(--card); border-radius: 16px; padding: 20px 22px; width: min(440px, 92vw); max-height: 86vh; overflow: auto; }
-.battle-side { display: grid; grid-template-columns: 56px 1fr; gap: 8px; align-items: center; margin: 6px 0; }
-.battle-side canvas { width: 56px; height: 56px; }
+.battle-side { display: grid; grid-template-columns: 80px 1fr; gap: 8px; align-items: center; margin: 6px 0; }
+.battle-side canvas { width: 80px; height: 80px; }
 .hp { height: 8px; background: #efece6; border-radius: 4px; overflow: hidden; }
 .hp i { display: block; height: 100%; background: var(--good); transition: width .25s; }
 .battle-log { font-size: 13px; min-height: 120px; max-height: 200px; overflow: auto; background: #faf8f4; border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
@@ -93,5 +93,30 @@ canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .choice { border: 2px solid var(--line); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; background: var(--card); }
 .choice.on { border-color: var(--accent); }
-.choice canvas { width: 80px; height: 80px; }
+.choice canvas { width: 120px; height: 120px; }
 .personas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+.card.highlight { border-color: #f2c94c; background: #fffbea; }
+.complications { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
+.face { width: 220px; background: #000; border-radius: 28px; border: 6px solid #2b2b2b; padding: 12px; display: flex; gap: 10px; align-items: center; color: #fff;
+  font-family: "Fusion Pixel 12px Proportional SC", monospace; font-size: 12px; -webkit-font-smoothing: none; }
+.comp-circle { width: 56px; height: 56px; border-radius: 50%; padding: 4px; flex: none; }
+.comp-inner { width: 48px; height: 48px; border-radius: 50%; background: #111; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.comp-inner canvas { width: 80px; height: 80px; margin-top: 6px; }
+.comp-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.comp-time { font-size: 24px; line-height: 1; }
+.comp-inline { color: #ffd23f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.comp-corner { color: #9a9a9a; }
+.chat { display: flex; flex-direction: column; gap: 6px; }
+.msg { max-width: 80%; padding: 6px 10px; border-radius: 12px; font-size: 13px; }
+.msg.me { align-self: flex-end; background: var(--ink); color: #fff; }
+.msg.pet { align-self: flex-start; background: #efece6; }
+.chart { display: flex; gap: 4px; align-items: flex-end; height: 80px; }
+.chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 10px; color: var(--muted); }
+.chart .col i { display: block; width: 100%; background: var(--good); border-radius: 3px 3px 0 0; min-height: 2px; }
+table.kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.kv td { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+table.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.letter canvas { width: 80px; height: 80px; }
+
+@media (max-width: 1000px) { .watch-wrap { position: static; } }

@@ -5,6 +5,10 @@ import {
   bossTypeForWeek,
   conditionMultiplier,
   daysBetween,
+  effectiveness,
+  getSkill,
+  stageThreshold,
+  SUPER,
   defaultConfig as cfg,
   defaultLoadout,
   evolutionStatus,
@@ -37,7 +41,8 @@ import {
   type Tactic,
 } from "@pulseling/engine";
 import { makeDay, PERSONAS, type PersonaId, type SimUser } from "@pulseling/sim/personas";
-import { RARITY_NAME, speciesName, TYPE_NAME, VARIANT_NAME } from "./text";
+import { RARITY_NAME, skillName, speciesName, TYPE_NAME, VARIANT_NAME } from "./text";
+import { CHATS_PER_DAY, promiseKept, promiseLine, replyLine, weeklyLetter, type PromiseKind, type ReplyId } from "./talk";
 
 const HISTORY_DAYS = 28;
 const STORAGE_KEY = "pulseling-prototype-v1";
@@ -94,6 +99,16 @@ export interface GameState {
   tactic: Tactic;
   feed: { date: string; text: string; kind: "evolve" | "rarity" | "capture" | "boss" | "info" }[];
   trial: "none" | "offered" | "active";
+  letters: { date: string; text: string; read: boolean }[];
+  chat: { date: string; used: number; log: { from: "me" | "pet"; text: string; date: string }[] };
+  promises: { kind: PromiseKind; due: string; kept?: boolean }[];
+  /** Things the pet remembers, newest first. */
+  memories: { date: string; text: string }[];
+  hibernatedDays: number;
+  /** A line the pet wants to say first thing (e.g. about a kept promise). */
+  pendingLine: string | null;
+  /** Watch-sized version of pendingLine. */
+  pendingShort: string | null;
 }
 
 export type DayInput = Omit<DailyHealth, "date">;
@@ -144,6 +159,13 @@ export function newGame(starter: Starter, persona: PersonaId, installDate = new 
     tactic: "balanced",
     feed: [{ date: installDate, text: "孵化了！", kind: "info" }],
     trial: "none",
+    letters: [],
+    chat: { date: installDate, used: 0, log: [] },
+    promises: [],
+    memories: [],
+    hibernatedDays: 0,
+    pendingLine: null,
+    pendingShort: null,
   };
 }
 
@@ -175,6 +197,15 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
 
   const settled = processDay(s.pet, day, s.history, { active: s.trial !== "offered" }, cfg);
   s.history.push(day);
+  s.pendingLine = null;
+  s.pendingShort = null;
+  for (const p of s.promises) {
+    if (p.due !== date || p.kept !== undefined) continue;
+    p.kept = promiseKept(p.kind, day);
+    s.pendingLine = promiseLine(s.pet.personality, p.kind, p.kept);
+    s.pendingShort = p.kept ? "说到做到了！" : "没关系，再试试";
+    if (p.kept) remember(s, p.kind === "sleep" ? "你答应过早点睡，真的做到了" : "你答应过去运动，真的去了");
+  }
   s.pet = settled.pet;
   s.results.push(settled.result);
   if (settled.result.worn) s.qualities.push(settled.result.quality);
@@ -187,6 +218,7 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
   s.today = morning;
   if (s.trial === "offered") {
     s.morning = null;
+    s.hibernatedDays++;
     return s;
   }
 
@@ -250,14 +282,72 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
     s.boss = { date: morning, opponentName: opponent.name, opponentType: type, result, matchup: bossMatchup(type, petTypes(s.pet)) };
     s.bosses.unshift(s.boss);
     s.feed.unshift({ date: morning, text: result.winner === "a" ? `打赢了${TYPE_NAME[type]}系周 Boss！` : `${TYPE_NAME[type]}系周 Boss 没打过，下周再来`, kind: "boss" });
+    const weekStart = addDays(morning, -7);
+    const counter = s.learned.find((id) => effectiveness(getSkill(id).type, [type]) >= SUPER);
+    s.letters.unshift({
+      date: morning,
+      read: false,
+      text: weeklyLetter({
+        personality: s.pet.personality,
+        days: s.history.filter((d) => d.date >= weekStart),
+        growth: s.results.filter((r) => r.date >= weekStart).reduce((a, r) => a + r.gain, 0),
+        captures: Object.entries(s.dex).filter(([, e]) => e.captured && e.captured > weekStart).map(([id]) => speciesName(id)),
+        bossType: type,
+        bossWon: result.winner === "a",
+        bossAdvantage: s.boss.matchup,
+        nextBossType: bossTypeForWeek(s.userId, addDays(morning, 1)),
+        counterHint: counter ? skillName(counter) : null,
+      }),
+    });
+    s.feed.unshift({ date: morning, text: "收到了一封来信", kind: "info" });
   }
 
   if (dayNumber(s) === 3 && s.trial === "none") s.trial = "offered";
   return s;
 }
 
+const WAKE_GIFT = 15;
+
+/** Waking from hibernation never punishes: the pet keeps everything and brings a small gift. */
 export function startTrial(prev: GameState): GameState {
-  return { ...prev, trial: "active" };
+  const s: GameState = structuredClone(prev);
+  s.trial = "active";
+  if (s.hibernatedDays > 0) {
+    const t = stageThreshold(s.pet.stage, cfg);
+    s.pet.progress = t ? Math.min(t.threshold, s.pet.progress + WAKE_GIFT) : s.pet.progress;
+    s.pet.totalGrowth += WAKE_GIFT;
+    s.pendingLine = `我睡了 ${s.hibernatedDays} 天，梦里一直在找你。送你一份礼物！`;
+    s.pendingShort = "我醒啦！";
+    s.feed.unshift({ date: s.today, text: `醒来了，带回一份礼物：成长值 +${WAKE_GIFT}`, kind: "info" });
+    s.hibernatedDays = 0;
+  }
+  return s;
+}
+
+function remember(s: GameState, text: string) {
+  s.memories.unshift({ date: s.today, text });
+  s.memories = s.memories.slice(0, 12);
+}
+
+export const chatsLeft = (s: GameState) => (s.chat.date === s.today ? CHATS_PER_DAY - s.chat.used : CHATS_PER_DAY);
+
+/** One of the day's three short exchanges. Promises are checked against the data of the day they were made for. */
+export function chat(prev: GameState, reply: ReplyId, label: string): GameState {
+  if (chatsLeft(prev) <= 0 || prev.trial === "offered") return prev;
+  const s: GameState = structuredClone(prev);
+  if (s.chat.date !== s.today) s.chat = { date: s.today, used: 0, log: s.chat.log };
+  s.chat.used++;
+  s.chat.log.push({ from: "me", text: label, date: s.today }, { from: "pet", text: replyLine(s.pet.personality, reply), date: s.today });
+  s.chat.log = s.chat.log.slice(-30);
+  if (reply === "sleep-early") s.promises.push({ kind: "sleep", due: s.today });
+  if (reply === "move") s.promises.push({ kind: "move", due: addDays(s.today, 1) });
+  if (reply === "tired") remember(s, "你说过那天好累");
+  s.promises = s.promises.slice(-10);
+  return s;
+}
+
+export function readLetter(prev: GameState, date: string): GameState {
+  return { ...prev, letters: prev.letters.map((l) => (l.date === date ? { ...l, read: true } : l)) };
 }
 
 export function setTarget(prev: GameState, target: AdultVariant | undefined): GameState {
@@ -292,7 +382,16 @@ export function save(s: GameState) {
 export function load(): GameState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as GameState) : null;
+    if (!raw) return null;
+    const s = JSON.parse(raw) as GameState;
+    s.letters ??= [];
+    s.chat ??= { date: s.today, used: 0, log: [] };
+    s.promises ??= [];
+    s.memories ??= [];
+    s.hibernatedDays ??= 0;
+    s.pendingLine ??= null;
+    s.pendingShort ??= null;
+    return s;
   } catch {
     return null;
   }

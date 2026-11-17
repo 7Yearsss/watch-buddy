@@ -1,6 +1,6 @@
 import type { AdultVariant, Cosmetics, ElementType } from "@pulseling/engine";
 
-export const GRID = 32;
+export const GRID = 40;
 
 interface Palette {
   main: string;
@@ -8,18 +8,19 @@ interface Palette {
   dark: string;
   outline: string;
   accent: string;
+  belly: string;
 }
 
 export const PALETTES: Record<ElementType, Palette> = {
-  grass: { main: "#5bb04a", light: "#a6dd7c", dark: "#2f7a32", outline: "#16351a", accent: "#e8f06a" },
-  water: { main: "#3f8fd8", light: "#8cc8f2", dark: "#245a9e", outline: "#10284a", accent: "#bfe9ff" },
-  fire: { main: "#e8603c", light: "#f6a56b", dark: "#a8341f", outline: "#3b1a12", accent: "#ffd23f" },
-  electric: { main: "#f2c81f", light: "#fff08a", dark: "#c08d0c", outline: "#3a2e05", accent: "#ffffff" },
-  ground: { main: "#b08850", light: "#d9b77e", dark: "#7a5a30", outline: "#3a2a14", accent: "#e6d2a8" },
-  fighting: { main: "#d0545a", light: "#f09ba0", dark: "#8f2a30", outline: "#3a1014", accent: "#f5e6c8" },
-  flying: { main: "#8fb4e8", light: "#d2e4fb", dark: "#5a7fb8", outline: "#1e2c48", accent: "#ffffff" },
-  shadow: { main: "#6a4fb0", light: "#a48be0", dark: "#3d2a78", outline: "#1a1030", accent: "#e14b8a" },
-  dragon: { main: "#3fae9a", light: "#8fe0cf", dark: "#1f6e60", outline: "#0c302a", accent: "#f2c94c" },
+  grass: { main: "#5bb04a", light: "#9fdc6f", dark: "#2f7a32", outline: "#173d1c", accent: "#e8f06a", belly: "#e6f5c9" },
+  water: { main: "#3f8fd8", light: "#86c8f4", dark: "#245a9e", outline: "#102a52", accent: "#d6f2ff", belly: "#dff1ff" },
+  fire: { main: "#ee6a3c", light: "#ffa66b", dark: "#ad3820", outline: "#4a1810", accent: "#ffd23f", belly: "#ffe4c2" },
+  electric: { main: "#f2c81f", light: "#fff08a", dark: "#c08d0c", outline: "#4a3606", accent: "#ffffff", belly: "#fff7d1" },
+  ground: { main: "#b88a52", light: "#dcb882", dark: "#7a5a30", outline: "#3a2a14", accent: "#efdcb0", belly: "#f1e2c4" },
+  fighting: { main: "#d0545a", light: "#f39aa0", dark: "#8f2a30", outline: "#3f1216", accent: "#f5e6c8", belly: "#fbe0de" },
+  flying: { main: "#93b8ea", light: "#d4e6fc", dark: "#5c80ba", outline: "#1e2c4c", accent: "#ffffff", belly: "#f0f6ff" },
+  shadow: { main: "#6a4fb0", light: "#a48be0", dark: "#3d2a78", outline: "#170e2c", accent: "#ff5c9d", belly: "#d8cdf5" },
+  dragon: { main: "#3fae9a", light: "#86e0cd", dark: "#1f6e60", outline: "#0c302a", accent: "#f2c94c", belly: "#dff5d6" },
 };
 
 function hueShift(hex: string, deg: number): string {
@@ -50,6 +51,7 @@ const shinyOf = (p: Palette): Palette => ({
   dark: hueShift(p.dark, 150),
   outline: p.outline,
   accent: hueShift(p.accent, 150),
+  belly: hueShift(p.belly, 150),
 });
 
 export interface SpriteSpec {
@@ -62,7 +64,83 @@ export interface SpriteSpec {
   mood?: "happy" | "sleepy" | "bored";
   /** Pulsing outline when evolution is close. */
   glow?: boolean;
+  /** Varies the silhouette of wild monsters. */
+  seed?: string;
   frame: number;
+}
+
+/**
+ * Pixel layer with "fill then auto-shade then auto-outline": shapes are filled with a flat base colour, then every
+ * pixel gets a highlight if its top/left neighbour is empty and a shadow if its bottom/right neighbour is empty,
+ * and finally a 1px outline is traced around the whole silhouette. That gives clean, readable pixel art from
+ * simple primitives.
+ */
+class Layer {
+  base: (Palette | null)[] = new Array(GRID * GRID).fill(null);
+  flat: (string | null)[] = new Array(GRID * GRID).fill(null);
+  private i = (x: number, y: number) => (x < 0 || y < 0 || x >= GRID || y >= GRID ? -1 : y * GRID + x);
+
+  fill(x: number, y: number, pal: Palette) {
+    const i = this.i(Math.round(x), Math.round(y));
+    if (i >= 0) this.base[i] = pal;
+  }
+  ellipse(cx: number, cy: number, rx: number, ry: number, pal: Palette) {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++)
+        if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) this.fill(x, y, pal);
+  }
+  poly(points: [number, number][], pal: Palette) {
+    const ys = points.map((p) => p[1]);
+    for (let y = Math.floor(Math.min(...ys)); y <= Math.ceil(Math.max(...ys)); y++) {
+      const xs: number[] = [];
+      for (let k = 0; k < points.length; k++) {
+        const [x1, y1] = points[k]!;
+        const [x2, y2] = points[(k + 1) % points.length]!;
+        if ((y1 <= y + 0.5 && y2 > y + 0.5) || (y2 <= y + 0.5 && y1 > y + 0.5)) xs.push(x1 + ((y + 0.5 - y1) / (y2 - y1)) * (x2 - x1));
+      }
+      xs.sort((a, b) => a - b);
+      for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.ceil(xs[k]! - 0.5); x <= Math.floor(xs[k + 1]! - 0.5); x++) this.fill(x, y, pal);
+    }
+  }
+  /** Detail pixels drawn after shading, never outlined. */
+  dot(x: number, y: number, c: string) {
+    const i = this.i(Math.round(x), Math.round(y));
+    if (i >= 0) this.flat[i] = c;
+  }
+  rect(x: number, y: number, w: number, h: number, c: string) {
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) this.dot(x + xx, y + yy, c);
+  }
+  filled(x: number, y: number) {
+    const i = this.i(x, y);
+    return i >= 0 && this.base[i] !== null;
+  }
+  render(ctx: CanvasRenderingContext2D) {
+    const out: (string | null)[] = new Array(GRID * GRID).fill(null);
+    for (let y = 0; y < GRID; y++)
+      for (let x = 0; x < GRID; x++) {
+        const p = this.base[y * GRID + x];
+        if (!p) {
+          const n = [this.base[this.i(x - 1, y)] ?? null, this.base[this.i(x + 1, y)] ?? null, this.base[this.i(x, y - 1)] ?? null, this.base[this.i(x, y + 1)] ?? null].find(Boolean);
+          if (n && this.i(x, y) >= 0) out[y * GRID + x] = n.outline;
+          continue;
+        }
+        const topEmpty = !this.filled(x, y - 1) || !this.filled(x - 1, y - 1);
+        const bottomEmpty = !this.filled(x, y + 1) || !this.filled(x + 1, y + 1) || !this.filled(x, y + 2);
+        out[y * GRID + x] = topEmpty ? p.light : bottomEmpty ? p.dark : p.main;
+      }
+    for (let k = 0; k < out.length; k++) {
+      const c = this.flat[k] ?? out[k];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(k % GRID, Math.floor(k / GRID), 1, 1);
+    }
+  }
+}
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
 }
 
 export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
@@ -70,155 +148,164 @@ export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
   canvas.height = GRID;
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, GRID, GRID);
-  const px = (x: number, y: number, c: string) => {
-    if (x < 0 || y < 0 || x >= GRID || y >= GRID) return;
-    ctx.fillStyle = c;
-    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
-  };
-  const rect = (x: number, y: number, w: number, h: number, c: string) => {
-    ctx.fillStyle = c;
-    ctx.fillRect(Math.round(x), Math.round(y), w, h);
-  };
 
   let pal = PALETTES[spec.primary];
   if (spec.shiny) pal = shinyOf(pal);
-  const second = spec.secondary ? (spec.shiny ? shinyOf(PALETTES[spec.secondary]) : PALETTES[spec.secondary]) : null;
+  let second = spec.secondary ? PALETTES[spec.secondary] : null;
+  if (second && spec.shiny) second = shinyOf(second);
   const f = spec.frame;
-  const bob = f % 2;
+  const phase = f % 4;
+  const lift = phase === 1 ? -1 : 0;
+  const squash = phase === 3 ? 1 : 0;
+  const L = new Layer();
+  const cx = 20;
 
   if (spec.stage === "egg") {
-    for (let y = -9; y <= 9; y++)
-      for (let x = -7; x <= 7; x++) {
-        const v = (x * x) / 49 + (y * y) / 81;
-        if (v <= 1) px(16 + x, 17 + y + bob, v > 0.8 ? pal.outline : y < -3 && x < 0 ? pal.light : pal.main);
-      }
-    for (let x = -6; x <= 6; x += 3) px(16 + x, 18 + bob + (x % 2), pal.dark);
+    const wobble = phase === 1 ? -1 : phase === 3 ? 1 : 0;
+    L.ellipse(cx + wobble * 0.3, 23, 8, 10, pal);
+    L.render(ctx);
+    const zig = [[-7, 22], [-4, 20], [-1, 22], [2, 20], [5, 22], [7, 21]];
+    ctx.fillStyle = pal.dark;
+    for (const [x, y] of zig) ctx.fillRect(cx + x!, y!, 1, 1);
+    ctx.fillStyle = pal.belly;
+    ctx.fillRect(cx - 4, 17, 2, 2);
     return;
   }
 
-  const r = { baby: 6, juvenile: 8, adult: 10, wild: 8 }[spec.stage];
-  const cx = 16;
-  const cy = 20 - (spec.stage === "baby" ? -1 : 0) + bob;
+  const size = { baby: 7, juvenile: 9, adult: 11, wild: 9 }[spec.stage];
+  const wildShape = spec.stage === "wild" ? hash(spec.seed ?? spec.primary) % 3 : 0;
+  const rx = size + squash + (wildShape === 2 ? 1 : 0);
+  const ry = size - 1 - squash + (wildShape === 1 ? 1 : 0);
+  const groundY = 34;
+  const cy = groundY - ry - (spec.stage === "baby" ? 1 : 3) + lift;
+  const top = cy - ry;
 
-  const effect = spec.cosmetics?.effect;
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  for (let x = -rx + 1; x <= rx - 1; x++) ctx.fillRect(cx + x, groundY + 1, 1, 1);
+  for (let x = -rx + 3; x <= rx - 3; x++) ctx.fillRect(cx + x, groundY + 2, 1, 1);
+
   if (spec.cosmetics?.aura) {
-    const rr = r + 5 + (f % 4 < 2 ? 0 : 1);
-    for (let a = 0; a < 360; a += 12) px(cx + Math.cos((a * Math.PI) / 180) * rr, cy - 1 + Math.sin((a * Math.PI) / 180) * rr, "#ffe680");
+    const rr = rx + 6 + (phase < 2 ? 0 : 1);
+    ctx.fillStyle = "#ffe680";
+    for (let a = 0; a < 360; a += 10) ctx.fillRect(Math.round(cx + Math.cos((a * Math.PI) / 180) * rr), Math.round(cy + Math.sin((a * Math.PI) / 180) * (ry + 6)), 1, 1);
   }
 
-  if (second && spec.variant === "flying") {
-    for (let i = 0; i < 6; i++) {
-      const flap = f % 2 ? -1 : 0;
-      rect(cx - r - 1 - i, cy - 4 + i + flap, 1, 6 - i, i === 0 ? second.outline : second.main);
-      rect(cx + r + i, cy - 4 + i + flap, 1, 6 - i, i === 0 ? second.outline : second.main);
+  const v = spec.stage === "adult" ? spec.variant ?? "pure" : undefined;
+
+  if (second && v === "flying") {
+    const flap = f % 2 ? -2 : 0;
+    for (const s of [-1, 1]) {
+      L.poly([[cx + s * (rx - 2), cy - 2], [cx + s * (rx + 8), cy - 7 + flap], [cx + s * (rx + 9), cy + 1 + flap], [cx + s * (rx + 2), cy + 4]], second);
     }
   }
-  if (second && spec.variant === "dragon") {
-    for (let i = 0; i < 6; i++) px(cx + r + i, cy + 3 - Math.floor(i / 2), i === 5 ? second.accent : second.main);
+  if (second && v === "dragon") {
+    L.poly([[cx + rx - 3, cy + 3], [cx + rx + 6, cy + 1], [cx + rx + 8, cy - 2], [cx + rx + 7, cy + 4], [cx + rx - 1, cy + 6]], second);
+    for (const s of [-1, 1]) L.poly([[cx + s * (rx - 3), cy - 4], [cx + s * (rx + 5), cy - 9], [cx + s * (rx + 3), cy - 1]], second);
   }
-  if (second && spec.variant === "ground") {
-    for (let i = -2; i <= 2; i++) {
-      rect(cx + i * 3, cy - r - 2, 2, 2, second.dark);
-      px(cx + i * 3, cy - r - 3, second.main);
-    }
+  if (second && v === "ground") {
+    for (let k = -2; k <= 2; k++) L.poly([[cx + k * 4 - 2, top + 3], [cx + k * 4, top - 3 - (k === 0 ? 2 : 0)], [cx + k * 4 + 2, top + 3]], second);
+  }
+  if (spec.primary === "water" && spec.stage !== "baby") {
+    L.poly([[cx + rx - 3, cy + 2], [cx + rx + 5, cy - 2 + (f % 2)], [cx + rx + 4, cy + 5], [cx + rx - 1, cy + 6]], pal);
+  }
+  if (spec.primary === "fire" && spec.stage !== "baby") {
+    const flick = f % 2;
+    L.poly([[cx + rx - 3, cy + 3], [cx + rx + 3, cy - 3 - flick], [cx + rx + 2, cy + 5]], PALETTES.fire === pal ? { ...pal, main: pal.accent, light: "#fff3b0", dark: pal.main } : pal);
   }
 
-  for (let y = -r; y <= r; y++)
-    for (let x = -r; x <= r; x++) {
-      const v = (x * x) / (r * r) + (y * y) / ((r - 1) * (r - 1));
-      if (v > 1) continue;
-      const edge = (x * x) / ((r - 1) * (r - 1)) + (y * y) / ((r - 2) * (r - 2)) > 1;
-      const c = edge ? pal.outline : x + y < -r / 2 ? pal.light : x + y > r ? pal.dark : pal.main;
-      px(cx + x, cy + y, c);
-    }
-
-  if (spec.glow && f % 2 === 0) {
-    for (let a = 0; a < 360; a += 8) px(cx + Math.cos((a * Math.PI) / 180) * (r + 1), cy + Math.sin((a * Math.PI) / 180) * r, "#fff6b0");
-  }
+  L.ellipse(cx, cy, rx, ry, pal);
 
   if (spec.stage !== "baby") {
-    rect(cx - r / 2 - 1, cy + r - 1, 3, 2, pal.outline);
-    rect(cx + r / 2 - 1, cy + r - 1, 3, 2, pal.outline);
+    const fy = cy + ry - 1;
+    for (const s of [-1, 1]) L.ellipse(cx + s * (rx * 0.5), fy, 2.5, 1.8, pal);
+    if (spec.stage === "adult" || spec.stage === "juvenile") for (const s of [-1, 1]) L.ellipse(cx + s * (rx - 0.5), cy + 2, 1.6, 2.4, pal);
   }
 
-  const top = cy - r + 1;
-  const big = spec.stage === "adult" && (spec.variant === "pure" || !spec.variant) ? 2 : spec.stage === "baby" ? 0 : 1;
+  if (second && v === "fighting") for (const s of [-1, 1]) L.ellipse(cx + s * (rx + 2), cy + 1 - (f % 2), 2.6, 2.6, second);
+
+  const crestBig = v === "pure" ? 2 : spec.stage === "baby" ? 0 : 1;
   if (spec.primary === "grass") {
-    rect(cx, top - 2 - big, 1, 2 + big, pal.dark);
-    rect(cx + 1, top - 3 - big, 2 + big, 2, pal.light);
-    if (big >= 1) rect(cx - 2 - big, top - 2 - big, 2 + big, 2, pal.main);
+    const sway = f % 2;
+    const leaf = { ...pal, main: pal.light, light: "#d7f5a8", dark: pal.main };
+    L.poly([[cx, top + 1], [cx - 1, top - 2 - crestBig], [cx + 1, top - 2 - crestBig]], pal);
+    L.ellipse(cx + 3 + sway, top - 3 - crestBig, 3 + crestBig * 0.6, 1.6 + crestBig * 0.3, leaf);
+    if (crestBig >= 1) L.ellipse(cx - 3 - sway, top - 2 - crestBig, 2.4 + crestBig * 0.5, 1.4, leaf);
   } else if (spec.primary === "water") {
-    for (let i = 0; i <= 2 + big; i++) rect(cx - i + 1, top - 3 - big + i, 1 + i, 1, i === 0 ? pal.accent : pal.light);
+    L.poly([[cx - 2, top + 2], [cx + 1, top - 3 - crestBig * 2], [cx + 3, top - 1 - crestBig], [cx + 2, top + 2]], pal);
   } else if (spec.primary === "fire") {
+    const flame = { ...pal, main: pal.accent, light: "#fff3b0", dark: pal.main };
     const flick = f % 2;
-    rect(cx - 1, top - 2 - big, 3, 2 + big, pal.accent);
-    px(cx + flick, top - 3 - big - 1, pal.accent);
-    if (big >= 1) {
-      px(cx - 2, top - 1 - flick, pal.light);
-      px(cx + 2, top - 2 + flick, pal.light);
-    }
+    L.poly([[cx - 3 - crestBig, top + 2], [cx - 1, top - 3 - crestBig * 2 - flick], [cx + 1, top - 1 - crestBig], [cx + 3, top - 4 - crestBig * 2 + flick], [cx + 3 + crestBig, top + 2]], flame);
   } else {
-    const p2 = PALETTES[spec.primary];
-    rect(cx - 2, top - 2, 1, 2, p2.dark);
-    rect(cx + 2, top - 2, 1, 2, p2.dark);
+    for (const s of [-1, 1]) L.poly([[cx + s * 4, top + 2], [cx + s * 5, top - 3], [cx + s * 2, top + 1]], pal);
   }
 
-  if (second && spec.variant === "dragon") {
-    rect(cx - 4, top - 2, 1, 3, second.accent);
-    rect(cx + 4, top - 2, 1, 3, second.accent);
+  if (second && v === "dragon") for (const s of [-1, 1]) L.poly([[cx + s * 2, top + 1], [cx + s * 4, top - 4], [cx + s * 4, top + 1]], { ...second, main: second.accent, light: "#fff6c8", dark: second.dark });
+
+  L.ellipse(cx, cy + ry * 0.35, rx * 0.55, ry * 0.45, { ...pal, main: pal.belly, light: pal.belly, dark: pal.belly });
+
+  if (spec.glow && f % 2 === 0) {
+    for (let a = 0; a < 360; a += 6) L.dot(cx + Math.cos((a * Math.PI) / 180) * (rx + 2), cy + Math.sin((a * Math.PI) / 180) * (ry + 2), "#fff6b0");
   }
 
-  const ey = cy - 1;
-  const ex = Math.max(2, Math.round(r / 2.6));
+  const eyeY = cy - Math.round(ry * 0.2);
+  const eyeX = Math.max(2, Math.round(rx * 0.42));
   const eyes = spec.cosmetics?.eyes;
+  const blink = f % 9 === 0;
   const sleepy = spec.mood === "sleepy" || eyes === "sleepy";
-  for (const sx of [-1, 1]) {
-    const x = cx + sx * ex;
-    if (sleepy) {
-      rect(x - 1, ey + 1, 2, 1, pal.outline);
+  for (const s of [-1, 1]) {
+    const x = cx + s * eyeX;
+    if (sleepy || blink) {
+      L.rect(x - 1, eyeY + 1, 3, 1, pal.outline);
     } else if (eyes === "heart") {
-      px(x - 1, ey, "#e0466e");
-      px(x, ey, "#e0466e");
-      px(x - 1, ey + 1, "#e0466e");
-      px(x, ey + 1, "#e0466e");
-    } else if (eyes === "star") {
-      rect(x - 1, ey, 2, 2, pal.outline);
-      px(x, ey, "#ffe066");
+      L.dot(x - 1, eyeY, "#e0466e"); L.dot(x + 1, eyeY, "#e0466e");
+      L.rect(x - 1, eyeY + 1, 3, 1, "#e0466e");
+      L.dot(x, eyeY + 2, "#e0466e");
     } else {
-      rect(x - 1, ey, 2, 2, pal.outline);
-      px(x - 1, ey, eyes === "sparkle" ? "#ffffff" : "#dfe9ff");
-      if (eyes === "sparkle" && f % 2) px(x - 2, ey - 1, "#ffffff");
+      L.rect(x - 1, eyeY - 1, 3, 4, pal.outline);
+      L.dot(x - 1, eyeY - 1, "#ffffff");
+      if (eyes === "star") L.dot(x + 1, eyeY + 2, "#ffe066");
+      if (eyes === "sparkle") { L.dot(x, eyeY - 1, "#ffffff"); if (f % 2) L.dot(x - 2, eyeY - 2, "#ffffff"); }
     }
-    px(x + sx * 2, ey + 2, "#f5a6a6");
+    L.rect(x + s * 2 - (s > 0 ? 1 : 0), eyeY + 3, 2, 1, "#f59aa8");
   }
-  if (spec.mood === "bored") rect(cx - 1, ey + 3, 2, 1, pal.outline);
-  else px(cx, ey + 3, pal.outline);
+  if (spec.mood === "bored") L.rect(cx - 1, eyeY + 4, 3, 1, pal.outline);
+  else if (spec.mood === "happy") {
+    L.dot(cx - 1, eyeY + 3, pal.outline); L.dot(cx, eyeY + 4, pal.outline); L.dot(cx + 1, eyeY + 3, pal.outline);
+  } else L.dot(cx, eyeY + 4, pal.outline);
 
-  if (second && spec.variant === "fighting") {
-    rect(cx - r + 1, top + 1, 2 * r - 2, 1, second.main);
-    px(cx + r - 1, top + 2, second.main);
-    rect(cx - r - 2, cy + 1, 3, 3, second.main);
-    rect(cx + r, cy + 1, 3, 3, second.main);
+  if (spec.primary === "water") for (const [dx, dy] of [[-rx + 3, 1], [rx - 4, 3], [-2, ry - 3]]) L.dot(cx + dx!, cy + dy!, pal.light);
+  if (spec.primary === "grass") for (const [dx, dy] of [[-rx + 3, 2], [rx - 4, 1]]) L.rect(cx + dx!, cy + dy!, 2, 1, pal.dark);
+  if (spec.primary === "fire") for (const s of [-1, 1]) L.dot(cx + s * (rx - 3), cy - 1, pal.accent);
+
+  if (second && v === "fighting") {
+    L.rect(cx - rx + 2, top + 3, 2 * rx - 3, 1, second.main);
+    L.rect(cx + rx - 2, top + 3 + (f % 2), 3, 1, second.main);
+    L.rect(cx + rx, top + 4 - (f % 2), 2, 1, second.main);
   }
+  if (second && v === "ground") for (const s of [-1, 1]) L.rect(cx + s * (rx - 4) - 1, cy + 1, 3, 1, second.dark);
 
   const acc = spec.cosmetics?.accessory;
   if (acc) {
-    const hy = top - 1;
-    if (acc === "beanie") rect(cx - 4, hy - 1, 9, 2, "#e35d6a"), px(cx, hy - 2, "#ffffff");
-    else if (acc === "tiny-crown") rect(cx - 3, hy - 1, 7, 2, "#ffcf33"), px(cx - 3, hy - 2, "#ffcf33"), px(cx, hy - 2, "#ffcf33"), px(cx + 3, hy - 2, "#ffcf33");
-    else if (acc === "leaf-cap") rect(cx - 4, hy - 1, 8, 2, "#3f8d3a"), rect(cx + 2, hy, 4, 1, "#3f8d3a");
-    else if (acc === "flower") rect(cx + 3, hy, 2, 2, "#ff9ad5"), px(cx + 3, hy + 1, "#ffe066");
-    else if (acc === "headband") rect(cx - r + 1, top + 2, 2 * r - 2, 1, "#ffffff");
-    else if (acc === "bow") rect(cx + 2, hy, 2, 2, "#ff6fa8"), rect(cx + 5, hy, 2, 2, "#ff6fa8"), px(cx + 4, hy + 1, "#c2185b");
-    else if (acc === "goggles") rect(cx - 4, ey - 1, 3, 3, "#7ad3ff"), rect(cx + 2, ey - 1, 3, 3, "#7ad3ff");
-    else if (acc === "scarf") rect(cx - r + 2, cy + r - 3, 2 * r - 4, 2, "#f2a541"), rect(cx + 2, cy + r - 1, 2, 2, "#f2a541");
+    const hy = top + 1;
+    if (acc === "beanie") { L.rect(cx - 5, hy - 1, 11, 2, "#e35d6a"); L.rect(cx - 5, hy + 1, 11, 1, "#b33a48"); L.rect(cx - 1, hy - 3, 2, 2, "#ffffff"); }
+    else if (acc === "tiny-crown") { L.rect(cx - 4, hy - 1, 9, 2, "#ffcf33"); for (const dx of [-4, 0, 4]) L.dot(cx + dx, hy - 2, "#ffcf33"); L.dot(cx, hy - 1, "#e0466e"); }
+    else if (acc === "leaf-cap") { L.rect(cx - 5, hy - 1, 10, 2, "#3f8d3a"); L.rect(cx + 3, hy + 1, 5, 1, "#2f6d2a"); }
+    else if (acc === "flower") { L.rect(cx + 4, hy - 1, 3, 3, "#ff9ad5"); L.dot(cx + 5, hy, "#ffe066"); }
+    else if (acc === "headband") L.rect(cx - rx + 2, top + 3, 2 * rx - 3, 1, "#ffffff");
+    else if (acc === "bow") { L.rect(cx + 2, hy - 1, 3, 3, "#ff6fa8"); L.rect(cx + 6, hy - 1, 3, 3, "#ff6fa8"); L.dot(cx + 5, hy, "#c2185b"); }
+    else if (acc === "goggles") { L.rect(cx - eyeX - 2, eyeY - 2, 5, 5, "#7ad3ff"); L.rect(cx + eyeX - 2, eyeY - 2, 5, 5, "#7ad3ff"); L.rect(cx - eyeX + 3, eyeY, 2 * eyeX - 5, 1, "#3a3a3a"); }
+    else if (acc === "scarf") { L.rect(cx - rx + 3, cy + ry - 4, 2 * rx - 5, 2, "#f2a541"); L.rect(cx + 3, cy + ry - 2, 2, 3, "#e08a24"); }
   }
 
+  const effect = spec.cosmetics?.effect;
   if (effect) {
     const color = { petals: "#ffb3d9", sparks: "#ffe066", bubbles: "#bfe9ff", notes: "#ffffff" }[effect] ?? "#ffffff";
-    for (let i = 0; i < 4; i++) {
-      const a = ((f * 25 + i * 90) * Math.PI) / 180;
-      px(cx + Math.cos(a) * (r + 3), cy - 2 + Math.sin(a) * (r + 2), color);
+    for (let k = 0; k < 4; k++) {
+      const a = ((f * 22 + k * 90) * Math.PI) / 180;
+      L.dot(cx + Math.cos(a) * (rx + 4), cy - 2 + Math.sin(a) * (ry + 3), color);
     }
   }
+
+  L.render(ctx);
 }
