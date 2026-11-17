@@ -15,6 +15,7 @@ export const STARTER_BASE: Record<Starter, StatBlock> = {
 const VARIANT_SHIFT: Partial<Record<AdultVariant, Partial<StatBlock>>> = {
   flying: { speed: 10, defense: -10 },
   fighting: { attack: 10, recovery: -10 },
+  ground: { defense: 10, speed: -10 },
 };
 
 export const STAGE_MULTIPLIER = { baby: 1, juvenile: 1.15, adult: 1.3 } as const;

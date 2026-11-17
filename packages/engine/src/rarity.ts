@@ -12,7 +12,9 @@ export const HATCH_RARITY_WEIGHTS: Record<Rarity, number> = {
 
 /** Rarity is a starting point: healthy habits can raise it up to epic. Legendary stays hatch-only. */
 export const EARNED_RARITY_CAP: Rarity = "epic";
-export const ACTIVE_DAYS_FOR_UPGRADE = 100;
+export const ACTIVE_DAYS_FOR_UPGRADE = 180;
+/** Earned upgrades lift a pet at most this many tiers above its hatch rarity, so hatch luck still matters. */
+export const MAX_EARNED_TIERS = 2;
 
 /** Placeholder ids until the art exists. */
 export const COSMETIC_POOLS = {
@@ -42,9 +44,11 @@ export function rollCosmetics(rng: Rng, rarity: Rarity): Cosmetics {
   return out;
 }
 
-export function nextEarnedRarity(r: Rarity): Rarity | null {
+export function nextEarnedRarity(r: Rarity, hatch: Rarity = r): Rarity | null {
   const i = RARITIES.indexOf(r);
-  return i < RARITIES.indexOf(EARNED_RARITY_CAP) ? RARITIES[i + 1]! : null;
+  if (i >= RARITIES.indexOf(EARNED_RARITY_CAP)) return null;
+  if (i - RARITIES.indexOf(hatch) >= MAX_EARNED_TIERS) return null;
+  return RARITIES[i + 1]!;
 }
 
 /**
@@ -53,7 +57,7 @@ export function nextEarnedRarity(r: Rarity): Rarity | null {
  */
 export function upgradeRarity(pet: PetState, reason: RarityUpgrade): PetState {
   if (pet.rarityUpgrades.includes(reason)) return pet;
-  const next = nextEarnedRarity(pet.rarity);
+  const next = nextEarnedRarity(pet.rarity, pet.hatchRarity);
   const rarityUpgrades = [...pet.rarityUpgrades, reason];
   if (!next) return { ...pet, rarityUpgrades };
   const layer = LAYERS[RARITIES.indexOf(next) - 1]!;

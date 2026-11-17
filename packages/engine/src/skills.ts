@@ -66,8 +66,8 @@ export const ULTIMATE: Record<ElementType, SkillId> = {
   shadow: "eclipse",
 };
 
-/** Skills of another type than the user hit 20% softer: they patch weaknesses, they don't change identity. */
-export const OFF_TYPE_PENALTY = 0.8;
+/** Skills of another type than the user hit 10% softer: they patch weaknesses, they don't change identity. */
+export const OFF_TYPE_PENALTY = 0.9;
 
 export function getSkill(id: string): Skill {
   const s = (SKILLS as Record<string, Skill>)[id];

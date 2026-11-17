@@ -16,11 +16,14 @@ const zeroStats = (): Record<Stat, number> => Object.fromEntries(STATS.map((s) =
 const bestOf = (echoes: EchoScores, types: EchoType[]) =>
   Math.max(0, ...types.map((t) => echoes[t] ?? 0));
 
-/** Growth earned on one worn day. Wearing the watch alone earns the base amount; doing better than usual up to doubles it. */
+/** Growth earned on one worn day. Wearing the watch alone earns the base amount; doing better than usual in several areas up to doubles it. */
 export function dayGrowth(echoes: EchoScores, cfg: EngineConfig): DayGrowth {
   const g = cfg.growth;
-  const values = Object.values(echoes);
-  const best = values.length ? Math.max(0, ...values) : 0;
+  const top = Object.values(echoes)
+    .map((v) => Math.max(0, v))
+    .sort((a, b) => b - a)
+    .slice(0, g.topEchoes);
+  const best = top.length ? top.reduce((s, v) => s + v, 0) / g.topEchoes : 0;
 
   const statGains = zeroStats();
   for (const stat of STATS) statGains[stat] = g.statBase + g.statBonus * bestOf(echoes, cfg.statSources[stat]);

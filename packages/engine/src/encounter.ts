@@ -53,7 +53,7 @@ export interface EncounterInput {
   /** Yesterday's echoes. */
   echoes: EchoScores;
   weeklyEnergyFraction: number;
-  /** Dragon species only appear when the dragon lifestyle condition holds. */
+  /** Dragons are far more likely when the dragon lifestyle condition holds; otherwise they are rare. */
   dragonEligible: boolean;
 }
 
@@ -80,14 +80,16 @@ export function rollEncounter(input: EncounterInput, cfg: EngineConfig, roster =
   const guaranteed = input.daysSinceLastEncounter >= e.pityDays;
   if (!guaranteed && rng() >= e.chance) return null;
 
-  const pool = roster.filter((s) => s.type !== "dragon" || input.dragonEligible);
+  const pool = roster;
   const boost = 1 + e.weeklyRareBoost * input.weeklyEnergyFraction;
   const available = RARITIES.filter((r) => pool.some((s) => s.rarity === r));
   const rarity = weighted(rng, available, (r) => e.rarityWeights[r] * (r === "common" ? 1 : boost)) ?? "common";
 
   const typeWeight = (t: ElementType) =>
     t === "dragon"
-      ? e.typeWeight.base + e.typeWeight.affinity
+      ? input.dragonEligible
+        ? e.typeWeight.base + e.typeWeight.affinity
+        : e.dragonBaseWeight
       : e.typeWeight.base + e.typeWeight.affinity * input.affinity[t] + e.typeWeight.echo * Math.max(0, input.echoes[t] ?? 0);
   const species = weighted(rng, pool.filter((s) => s.rarity === rarity), (s) => typeWeight(s.type));
   if (!species) return null;

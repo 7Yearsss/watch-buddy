@@ -5,9 +5,11 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/engine --noEmit"
+    "typecheck": "tsc -p packages/engine --noEmit && tsc -p apps/sim --noEmit",
+    "sim": "pnpm --filter @pulseling/sim sim"
   },
   "devDependencies": {
+    "@types/node": "22.10.2",
     "typescript": "5.6.3",
     "vitest": "2.1.8"
   }

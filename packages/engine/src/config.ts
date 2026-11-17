@@ -27,7 +27,8 @@ export interface EngineConfig {
   /** Per-day anti-cheat caps applied before scoring. */
   caps: Partial<Record<keyof import("./types").DailyHealth, number>>;
   echoWeights: Record<EchoType, Partial<Record<ScoreKey, number>>>;
-  growth: { base: number; bonus: number; statBase: number; statBonus: number };
+  /** The daily bonus averages the best few echoes, so one noisy metric can't max it out. */
+  growth: { base: number; bonus: number; statBase: number; statBonus: number; topEchoes: number };
   condition: { max: number; days: number };
   statSources: Record<Stat, EchoType[]>;
   /** Absolute lifestyle references used for evolution branches and wild encounters. */
@@ -56,6 +57,8 @@ export interface EngineConfig {
     /** Rare/epic weights grow by up to this factor as the week's energy fills up. */
     weeklyRareBoost: number;
     typeWeight: { base: number; affinity: number; echo: number };
+    /** Dragon weight when the dragon lifestyle is not met: rare, but never impossible, so everyone can finish the dex. */
+    dragonBaseWeight: number;
     shinyOdds: number;
   };
   opponents: {
@@ -148,7 +151,7 @@ export const defaultConfig: EngineConfig = {
     electric: { highHrZoneMinutes: 0.7, intervalMinutes: 0.3 },
     ground: { activeDays: 0.6, flightsClimbed: 0.4 },
   },
-  growth: { base: 10, bonus: 10, statBase: 2, statBonus: 2 },
+  growth: { base: 10, bonus: 10, statBase: 2, statBonus: 2, topEchoes: 3 },
   condition: { max: 0.25, days: 3 },
   statSources: {
     hp: ["grass"],
@@ -181,19 +184,20 @@ export const defaultConfig: EngineConfig = {
     rarityWeights: { common: 70, uncommon: 0, rare: 25, epic: 5, legendary: 0 },
     weeklyRareBoost: 1,
     typeWeight: { base: 1, affinity: 4, echo: 2 },
+    dragonBaseWeight: 1,
     shinyOdds: 64,
   },
   opponents: {
     wildStrength: { common: 0.85, uncommon: 0.9, rare: 0.95, epic: 1.05, legendary: 1.15 },
     trainingStrength: 0.8,
-    bossStrength: { bossAdvantage: 0.85, neutral: 1.05, petAdvantage: 1.3 },
+    bossStrength: { bossAdvantage: 0.92, neutral: 1.05, petAdvantage: 1.25 },
   },
   evolution: {
     juvenile: { threshold: 200, minDays: 10 },
     adult: { threshold: 850, minDays: 40 },
     windowDays: 21,
     minAffinity: 0.6,
-    juvenileUpgrade: { types: ["water", "fire", "fighting", "flying", "electric"], windowDays: 14 },
+    juvenileUpgrade: { types: ["fire", "fighting", "flying", "electric"], windowDays: 14 },
     dragon: {
       minTypes: 4,
       minAffinity: 0.9,
@@ -201,6 +205,6 @@ export const defaultConfig: EngineConfig = {
       exerciseTypes: ["fire", "fighting", "flying", "electric"],
       windowDays: 14,
     },
-    secondTypes: ["flying", "fighting"],
+    secondTypes: ["flying", "fighting", "ground"],
   },
 };

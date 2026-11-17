@@ -53,15 +53,16 @@ export function bossMatchup(bossType: EchoType, petTypes: ElementType[]): Matchu
 }
 
 /**
- * Weekly boss, scaled from your pet's average over the last 4 weeks and softened or hardened by the type
- * matchup. Beat it by having a better week than usual and bringing a skill that counters its type.
+ * Weekly boss, scaled from your pet's current stats (before the condition bonus) and softened or hardened by
+ * the type matchup. Beat it by having a better week than usual and bringing a skill that counters its type.
+ * (Scaling from a 4-week average made it far too easy: pets grow, and evolving jumps their stats.)
  */
-export function bossCombatant(type: EchoType, averageOfLast4Weeks: StatBlock, petTypes: ElementType[], cfg: EngineConfig): Combatant {
+export function bossCombatant(type: EchoType, reference: StatBlock, petTypes: ElementType[], cfg: EngineConfig): Combatant {
   const flat = { hp: 50, recovery: 50, attack: 50, speed: 50, defense: 50 };
   return {
     name: `boss-${type}`,
     types: [type],
-    stats: scaled(flat, averageOfLast4Weeks, cfg.opponents.bossStrength[bossMatchup(type, petTypes)]),
+    stats: scaled(flat, reference, cfg.opponents.bossStrength[bossMatchup(type, petTypes)]),
     skills: (["tackle", TYPE_SKILL[type], "guard", ULTIMATE[type]] as SkillId[]).map(getSkill),
     tactic: "balanced",
   };
@@ -88,10 +89,10 @@ export function runDailyTrial(
 
 export function runWeeklyBoss(
   pet: PetState,
-  input: { userId: string; date: string; type: EchoType; averageOfLast4Weeks: StatBlock } & PetBattleOptions,
+  input: { userId: string; date: string; type: EchoType } & PetBattleOptions,
   cfg: EngineConfig,
 ): { opponent: Combatant; result: BattleResult } {
-  const opponent = bossCombatant(input.type, input.averageOfLast4Weeks, petTypes(pet), cfg);
+  const opponent = bossCombatant(input.type, petStats(pet), petTypes(pet), cfg);
   const result = simulateBattle(petCombatant(pet, input, cfg), opponent, `${input.userId}:${input.date}:boss`);
   return { opponent, result };
 }

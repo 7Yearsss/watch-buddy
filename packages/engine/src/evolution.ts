@@ -6,7 +6,6 @@ import { daysBetween, lastDays } from "./util";
 
 export type EvolutionGap =
   | { kind: "below"; type: EchoType; current: number; required: number }
-  | { kind: "notHighest"; type: EchoType; leader: EchoType }
   | { kind: "dragon"; strongTypes: EchoType[]; requiredTypes: number; strongExercise: number; requiredExercise: number };
 
 export interface EvolutionOption {
@@ -48,8 +47,6 @@ export function adultOptions(affinity: Affinity, dragonAffinity: Affinity, cfg: 
   for (const type of e.secondTypes) {
     const gaps: EvolutionGap[] = [];
     if (affinity[type] < e.minAffinity) gaps.push({ kind: "below", type, current: affinity[type], required: e.minAffinity });
-    const leader = e.secondTypes.reduce((best, t) => (affinity[t] > affinity[best] ? t : best), type);
-    if (leader !== type && affinity[leader] > affinity[type]) gaps.push({ kind: "notHighest", type, leader });
     options.push({ variant: type, met: gaps.length === 0, gaps, earnsRarityUpgrade: gaps.length === 0 });
   }
 

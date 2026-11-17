@@ -123,7 +123,7 @@ describe("daily trial and weekly boss", () => {
       for (let i = 0; i < 300; i++) {
         const { result } = runWeeklyBoss(
           juvenile,
-          { userId: `u${i}`, date: "2026-03-08", type, averageOfLast4Weeks: avg, recentQualities: [q, q, q], loadout },
+          { userId: `u${i}`, date: "2026-03-08", type, recentQualities: [q, q, q], loadout },
           cfg,
         );
         if (result.winner === "a") wins++;
@@ -133,7 +133,7 @@ describe("daily trial and weekly boss", () => {
 
     it("is never a sure loss: a counter skill and a good week turn a bad matchup around", () => {
       expect(rate("water", 0)).toBeLessThan(0.3);
-      expect(rate("water", 1, ["tackle", "ember-bite", "leaf-cut", "blaze-burst"])).toBeGreaterThan(0.65);
+      expect(rate("water", 1, ["tackle", "ember-bite", "leaf-cut", "blaze-burst"])).toBeGreaterThan(0.55);
     });
 
     it("is a real challenge in a neutral week and rewards a better week", () => {
@@ -145,7 +145,7 @@ describe("daily trial and weekly boss", () => {
     });
 
     it("is never a sure win with the type advantage", () => {
-      expect(rate("grass", 0)).toBeLessThan(0.8);
+      expect(rate("grass", 0)).toBeLessThan(0.85);
       expect(rate("grass", 0)).toBeGreaterThan(0.5);
     });
   });

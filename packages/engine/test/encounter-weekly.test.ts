@@ -40,9 +40,17 @@ describe("encounters", () => {
     expect(rollEncounter(input({ daysSinceLastEncounter: 4 }), cfg)).toEqual(rollEncounter(input({ daysSinceLastEncounter: 4 }), cfg));
   });
 
-  it("keeps dragons out unless eligible", () => {
-    for (let i = 0; i < 500; i++)
-      expect(rollEncounter(input({ userId: `d${i}`, daysSinceLastEncounter: 4 }), cfg)?.species.type).not.toBe("dragon");
+  it("makes dragons rare but possible, and much likelier with the dragon lifestyle", () => {
+    const dragons = (eligible: boolean) => {
+      let n = 0;
+      for (let i = 0; i < 4000; i++)
+        if (rollEncounter(input({ userId: `d${i}`, daysSinceLastEncounter: 4, dragonEligible: eligible }), cfg)?.species.type === "dragon") n++;
+      return n / 4000;
+    };
+    const rare = dragons(false);
+    expect(rare).toBeGreaterThan(0.01);
+    expect(rare).toBeLessThan(0.08);
+    expect(dragons(true)).toBeGreaterThan(rare * 1.5);
   });
 
   it("leans towards the player's lifestyle", () => {

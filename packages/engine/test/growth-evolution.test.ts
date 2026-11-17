@@ -30,7 +30,8 @@ describe("growth", () => {
   it("earns the base for just wearing the watch and at most double", () => {
     expect(dayGrowth({}, cfg).gain).toBe(10);
     expect(dayGrowth({ grass: 0, water: -1 }, cfg).gain).toBe(10);
-    expect(dayGrowth({ grass: 1, flying: 0.5 }, cfg).gain).toBe(20);
+    expect(dayGrowth({ grass: 1, flying: 0.5 }, cfg).gain).toBe(15);
+    expect(dayGrowth({ grass: 1, flying: 1, water: 1, fire: 0.2 }, cfg).gain).toBe(20);
   });
 
   it("never drops condition below 1", () => {

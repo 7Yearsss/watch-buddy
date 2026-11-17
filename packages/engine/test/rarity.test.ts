@@ -99,11 +99,13 @@ describe("earning rarity", () => {
     expect(evolve(juvenile, status, "pure", days[days.length - 1]!.date).rarity).toBe("common");
   });
 
-  it("counts total active days, not a streak, and upgrades once at 100", () => {
+  it("counts total active days, not a streak, and upgrades once at the threshold", () => {
     const days = series(28 + 105, (i) => (i % 9 === 0 ? { worn: false } : {}));
     let p: PetState = { ...common(), hatchedOn: days[28]!.date, stageStartedOn: days[28]!.date, stage: "adult" };
     for (let i = 28; i < days.length; i++) p = processDay(p, days[i]!, days.slice(0, i), { active: true }, cfg).pet;
-    expect(p.activeDays).toBeGreaterThanOrEqual(ACTIVE_DAYS_FOR_UPGRADE - 15);
+    const wornDays = days.slice(28).filter((d) => d.worn).length;
+    expect(p.activeDays).toBe(wornDays);
+    expect(p.rarity).toBe("common");
     const filled = { ...p, activeDays: ACTIVE_DAYS_FOR_UPGRADE - 1 };
     const after = processDay(filled, { ...days[days.length - 1]!, date: "2027-01-01", worn: true }, days, { active: true }, cfg).pet;
     expect(after.rarity).toBe("uncommon");
