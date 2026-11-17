@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "tsx": "4.19.2"
+  },
+  "exports": {
+    "./personas": "./src/personas.ts"
   }
 }
