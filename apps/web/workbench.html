@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>宠物绘图工作台</title>
+    <style>
+      :root { --bg: #f4f2ee; --card: #fff; --ink: #1f1d1a; --muted: #6f6a62; --line: #e2ddd4; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+      main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 24px 0 10px; }
+      .muted { color: var(--muted); }
+      .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+      .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px; cursor: pointer; text-align: left; font: inherit; color: inherit; transition: border-color .15s, transform .15s; }
+      .tile:hover { border-color: #c9c2b6; }
+      .tile:active { transform: scale(.98); }
+      .tile[aria-current="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+      .tile .art { display: grid; grid-template-columns: 1fr 52px; gap: 6px; align-items: end; }
+      .tile .main { aspect-ratio: 1; background: #000; border-radius: 12px; }
+      .tile .sil { aspect-ratio: 1; border-radius: 8px; background: #fff; border: 1px solid var(--line); }
+      .tile .sil svg, .sil-art svg { filter: brightness(0); }
+      .tile b { display: block; margin-top: 6px; }
+      .tile small { color: var(--muted); }
+      .tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 6px; margin-left: 4px; vertical-align: 1px; }
+      .tag.fire { background: #ffe1d2; color: #a3381f; } .tag.water { background: #d9ecff; color: #1d4f96; } .tag.grass { background: #e0f3cf; color: #2f6d2a; }
+      svg { display: block; width: 100%; height: 100%; }
+      .bench { display: grid; grid-template-columns: 420px 1fr; gap: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+      @media (max-width: 760px) { .bench { grid-template-columns: 1fr; } }
+      .canvas { position: relative; width: 400px; height: 400px; max-width: 100%; border-radius: 16px; overflow: hidden; background: #000; }
+      .canvas > * { position: absolute; inset: 0; }
+      .canvas img { width: 100%; height: 100%; object-fit: contain; }
+      .grid { pointer-events: none; }
+      .side { display: flex; flex-direction: column; gap: 14px; }
+      .row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+      .chip { background: #000; border-radius: 14px; padding: 6px; }
+      .chip.light { background: #fff; border: 1px solid var(--line); }
+      .cap { font-size: 12px; color: var(--muted); text-align: center; margin-top: 4px; }
+      label { display: inline-flex; gap: 6px; align-items: center; }
+      input[type="url"] { width: 260px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>宠物绘图工作台</h1>
+      <div class="muted">上面是概念表（每格右边是剪影），点一格进入下面的工作台：大图带网格，旁边是剪影和手表上的实际尺寸，还可以垫一张参考图描。</div>
+
+      <h2>概念表</h2>
+      <div class="sheet" id="sheet"></div>
+
+      <h2 id="bench-title">工作台</h2>
+      <section class="bench">
+        <div class="canvas" id="canvas">
+          <img id="ref" alt="" hidden />
+          <div id="art"></div>
+          <svg class="grid" id="grid" viewBox="0 0 200 200"></svg>
+        </div>
+        <div class="side">
+          <div id="info"></div>
+          <div class="row">
+            <label><input type="checkbox" id="show-grid" checked /> 网格</label>
+            <label>参考图 <input type="url" id="ref-url" placeholder="粘贴图片地址，或选择本地文件" /></label>
+            <input type="file" id="ref-file" accept="image/*" />
+            <label>透明度 <input type="range" id="ref-op" min="0" max="100" value="40" /></label>
+          </div>
+          <div class="row" id="sizes"></div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/workbench.ts"></script>
+  </body>
+</html>

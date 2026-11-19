@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>宠物画风对比</title>
+    <style>
+      :root { --bg: #f4f2ee; --card: #fff; --ink: #1f1d1a; --muted: #6f6a62; --line: #e2ddd4; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+      main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .muted { color: var(--muted); }
+      .controls { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0 20px; align-items: center; }
+      .seg { display: inline-flex; background: #e9e5de; border-radius: 10px; padding: 3px; }
+      .seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 8px; font: inherit; cursor: pointer; color: var(--ink); transition: background .15s, box-shadow .15s; }
+      .seg button[aria-pressed="true"] { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+      label.check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+      .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+      .card h2 { font-size: 15px; margin: 0; align-self: flex-start; }
+      .watch { width: 220px; height: 264px; background: #000; border-radius: 52px; border: 8px solid #2b2b2b; display: grid; place-items: center; }
+      canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+      .sizes { display: flex; gap: 14px; align-items: flex-end; }
+      .chip { background: #000; border-radius: 16px; padding: 6px; display: grid; place-items: center; }
+      .sizes span { font-size: 12px; color: var(--muted); text-align: center; display: block; margin-top: 4px; }
+      ul { margin: 8px 0 0; padding-left: 20px; }
+      li { margin: 4px 0; }
+      .notes { margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>宠物画风对比 · 像素风</h1>
+      <div class="muted">四版并排：现在的程序生成版、上一版 Q 版团子、按宝可梦像素图方法手绘的小熊猫，以及同一只小熊猫的矢量版（曲线平滑，任何尺寸都清晰）。所有图都按整数倍放大显示。属性切换只对前两版有效。</div>
+      <div class="controls">
+        <div class="seg" id="action"></div>
+        <div class="seg" id="element"></div>
+        <label class="check"><input type="checkbox" id="sil" /> 剪影（涂黑看轮廓）</label>
+      </div>
+      <div class="row">
+        <section class="card">
+          <h2>现在</h2>
+          <div class="watch"><canvas id="old-big"></canvas></div>
+          <div class="sizes" id="old-sizes"></div>
+        </section>
+        <section class="card">
+          <h2>上一版 · 团子</h2>
+          <div class="watch"><canvas id="cute-big"></canvas></div>
+          <div class="sizes" id="cute-sizes"></div>
+        </section>
+        <section class="card">
+          <h2>新版 · 小熊猫（手绘像素）</h2>
+          <div class="watch"><canvas id="px-big"></canvas></div>
+          <div class="sizes" id="px-sizes"></div>
+        </section>
+        <section class="card">
+          <h2>矢量版 · 小熊猫（不再像素）</h2>
+          <div class="watch"><div class="vhost" id="vec-big" style="width:192px;height:192px"></div></div>
+          <div class="sizes" id="vec-sizes"></div>
+        </section>
+      </div>
+      <section class="card notes" style="align-items: stretch">
+        <h2>新版照着宝可梦像素图学了什么</h2>
+        <ul>
+          <li><b>动物原型 + 一个属性元素</b>：小熊猫（圆耳朵、白脸颊、环纹大尾巴），火只放在尾巴尖上。</li>
+          <li><b>3/4 侧身，带动作</b>：脸朝左，举起一只爪子打招呼，默认张嘴笑。</li>
+          <li><b>剪影往外伸</b>：两只耳朵、腮边白毛、卷起来的火尾巴都伸出身体，涂黑也认得出来。</li>
+          <li><b>小眼睛 + 高光</b>：每只眼 2×3 像素加 1 个白点；可爱靠头身比、姿势和表情。</li>
+          <li><b>每个像素都是手写的</b>：画在字符表里，16 色以内；描边按部位上色，受光一侧更浅；暗部偏红紫、亮部偏黄；头压在身体和耳朵上的地方有结构线。</li>
+          <li><b>小尺寸单独画</b>：40/64px 用一张专门画的 24×24 小图，不缩放大图。</li>
+          <li><b>整数倍显示</b>：每个美术像素正好占整数个屏幕像素，所以不会糊。</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="/src/pets.ts"></script>
+  </body>
+</html>
