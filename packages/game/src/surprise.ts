@@ -2,7 +2,7 @@ import type { DailyHealth, EchoScores, EchoType, PetState } from "@pulseling/eng
 import { TYPE_NAME } from "./text";
 
 /** Daily small surprises (07 §2): every morning without a wild monster gets one, never the same kind within 3 days. */
-export type SurpriseKind = "dream" | "item" | "footprint" | "discovery" | "move";
+export type SurpriseKind = "dream" | "item" | "footprint" | "discovery" | "move" | "meteor" | "guest" | "treasure" | "weather";
 
 export interface Surprise {
   date: string;
@@ -12,10 +12,30 @@ export interface Surprise {
   short: string;
   item?: string;
   move?: IdleMove;
+  /** guest: a wild species that stays the night and is met for sure the next morning. */
+  guest?: string;
+  /** weather: tomorrow's wild monsters lean towards this type. */
+  weather?: EchoType;
+  /** treasure: the morning the chest opens. */
+  opensOn?: string;
 }
 
-export const SURPRISE_LABEL: Record<SurpriseKind, string> = { dream: "梦境日记", item: "捡到小东西", footprint: "野怪足迹", discovery: "数据小发现", move: "学会新动作" };
-export const SURPRISE_ICON: Record<SurpriseKind, string> = { dream: "☁", item: "◆", footprint: "∴", discovery: "↗", move: "♪" };
+export const SURPRISE_LABEL: Record<SurpriseKind, string> = {
+  dream: "梦境日记", item: "捡到小东西", footprint: "野怪足迹", discovery: "数据小发现", move: "学会新动作",
+  meteor: "流星雨", guest: "迷路的野怪", treasure: "藏宝图", weather: "明天的天气",
+};
+export const SURPRISE_ICON: Record<SurpriseKind, string> = { dream: "☁", item: "◆", footprint: "∴", discovery: "↗", move: "♪", meteor: "✦", guest: "⌂", treasure: "✉", weather: "☂" };
+
+/** Rare finds from treasure maps; they go into the collection book like other items. */
+export const TREASURE_ITEMS = ["旧地图碎片", "金色橡果", "彩虹贝壳", "星砂瓶", "会发光的石头"];
+/** Days between finding a treasure map and the chest opening. */
+export const TREASURE_DAYS = 3;
+const WEATHER: { type: EchoType; name: string; text: string }[] = [
+  { type: "water", name: "下雨", text: "明天会下雨，水系野怪会多出来哦" },
+  { type: "fire", name: "大晴天", text: "明天是大晴天，火系野怪最喜欢晒太阳了" },
+  { type: "flying", name: "刮风", text: "明天有风，飞行系野怪会顺着风飞过来" },
+  { type: "electric", name: "雷雨", text: "明天可能打雷，电系野怪会变多" },
+];
 
 /** Collectibles by type. They go into the collection book and never give battle power. */
 export const ITEMS: Record<EchoType, string[]> = {
@@ -94,6 +114,10 @@ export interface SurpriseInput {
   /** Date of the last new move, so moves stay rare milestones. */
   lastMoveDate?: string;
   moves: IdleMove[];
+  /** Uncaptured wild species that could come to stay the night. */
+  guestCandidates?: string[];
+  /** A treasure map is already waiting to open. */
+  treasurePending?: boolean;
 }
 
 export function pickSurprise(x: SurpriseInput): Surprise {
@@ -108,6 +132,11 @@ export function pickSurprise(x: SurpriseInput): Surprise {
     { kind: "discovery", w: disc ? 3 : 0 },
     // New moves come early and then stop, so they feel like milestones.
     { kind: "move", w: nextMove && (!x.lastMoveDate || x.lastMoveDate <= addDaysStr(x.date, -10)) ? 2 : 0 },
+    // Events that change tomorrow: rarer, so they still feel like news.
+    { kind: "meteor", w: 1 },
+    { kind: "guest", w: x.guestCandidates?.length ? 1 : 0 },
+    { kind: "treasure", w: x.treasurePending ? 0 : 1 },
+    { kind: "weather", w: 1.5 },
   ];
   const pool = all.filter((p) => p.w > 0 && !recentKinds.has(p.kind));
   const choices = pool.length ? pool : [{ kind: "item" as SurpriseKind, w: 1 }];
@@ -141,6 +170,20 @@ export function pickSurprise(x: SurpriseInput): Surprise {
       return { date: x.date, kind, text: disc!.text, short: disc!.short };
     case "move":
       return { date: x.date, kind, move: nextMove!, text: `我学会了「${MOVE_NAME[nextMove!]}」！点点我看看`, short: `学会${MOVE_NAME[nextMove!]}了` };
+    case "meteor":
+      return { date: x.date, kind, text: "昨晚有流星雨，我许了个愿：明天遇到野怪的机会翻倍！", short: "流星雨！明天好运" };
+    case "guest": {
+      const id = x.guestCandidates![h % x.guestCandidates!.length]!;
+      return { date: x.date, kind, guest: id, text: "有只迷路的野怪来借宿一晚……明早它会来找你比试，赢了就能收服它", short: "有野怪来借宿" };
+    }
+    case "treasure": {
+      const opensOn = addDaysStr(x.date, TREASURE_DAYS);
+      return { date: x.date, kind, opensOn, text: `我捡到了一张藏宝图！${TREASURE_DAYS} 天后宝箱就能打开`, short: "捡到藏宝图！" };
+    }
+    case "weather": {
+      const w = WEATHER[h % WEATHER.length]!;
+      return { date: x.date, kind, weather: w.type, text: w.text, short: `明天${w.name}` };
+    }
   }
 }
 

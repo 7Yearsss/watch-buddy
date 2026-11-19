@@ -73,7 +73,8 @@ import { queueShow, setReducedMotion } from "./shows";
 import { renderShareCard, type ShareCard } from "./share";
 import { dayPhase, fmtClock, sleepWindow, type DayPhase } from "@pulseling/game";
 import { CHANNEL_DEFAULT, CHANNEL_NAME, noticesFor, smartStackRelevance, type Notice } from "@pulseling/game";
-import { HINT, ITEMS, MOVE_NAME, SURPRISE_ICON, type IdleMove } from "@pulseling/game";
+import { HINT, ITEMS, MOVE_NAME, SURPRISE_ICON, TREASURE_ITEMS, type IdleMove } from "@pulseling/game";
+import { WISH_LABEL, type Wish } from "@pulseling/game";
 
 type Tab = "today" | "pet" | "dex" | "battle" | "data";
 type SliderKey = "steps" | "sleepHours" | "bedtime" | "cardio" | "strength" | "hiit" | "deep";
@@ -324,6 +325,8 @@ function shortLine(s: GameState): string {
   if (m.encounter && m.captured) return `又碰到${name}了`;
   if (m.encounter) return `${name}跑掉了…`;
   if (m.surprise && m.date === s.today) return m.surprise.short;
+  const w = openWish(s);
+  if (w && phaseOf(s) !== "sleep") return w.short;
   const phase = phaseOf(s);
   if (phase === "sleep") return "zzz……";
   if (phase === "winddown") return "快到睡觉时间啦";
@@ -413,6 +416,7 @@ function watchToday(s: GameState, st: ReturnType<typeof status>): string {
     <div class="wc-ring" style="--from:${p};--to:${p}">${canvas(petSpec(s.pet, undefined, undefined, currentMood(s)))}</div>
     <div class="wp-big">${s.pet.stage === "adult" ? "成熟体" : `进化 ${pct(p)}`}</div>
     <div class="wp-line">${last ? `昨天 +${Math.round(last.gain)}` : "第一天"} · ${line}</div>
+    ${openWish(s) ? `<div class="wp-dim">心愿：${openWish(s)!.short}</div>` : ""}
     <div class="wp-dim">Boss ${bossIn === 0 ? "就是今天" : `还有 ${bossIn} 天`}</div>
   </div>`;
 }
@@ -503,7 +507,9 @@ function renderMorningCard(s: GameState): string {
     <div class="mc-step"><h3>昨天</h3>${c.highlights.map((h) => `<p>${h}</p>`).join("")}</div>
     <div class="mc-step"><h3>成长</h3><p>今天 <b>+${c.gain}</b> <span class="muted">${stageLabel}</span></p>
       <div class="mc-bar" style="--from:${c.from};--to:${c.to}"><i></i></div></div>
-    <div class="mc-step"><h3>${c.surprise.label}</h3><p class="${c.surprise.kind === "capture" ? "good" : ""}">${c.surprise.text}</p></div>
+    <div class="mc-step"><h3>${c.surprise.label}</h3><p class="${c.surprise.kind === "capture" ? "good" : ""}">${c.surprise.text}</p>
+      ${c.extras.map((x) => `<p class="${x.good ? "good" : "muted"}">${x.text}</p>`).join("")}</div>
+    ${c.wish ? `<div class="mc-step"><h3>今天的小心愿 · ${c.wish.label}</h3><p>${c.wish.text}</p></div>` : ""}
     ${animate ? '<div class="muted mc-hint">点一下跳过</div>' : ""}
   </div>`;
 }
@@ -596,6 +602,7 @@ function renderToday(s: GameState): string {
   return `<div class="stack">
     ${renderMorningCard(s)}
     ${s.pendingLine ? `<div class="card highlight"><p>${s.pendingLine}</p></div>` : ""}
+    ${renderWish(s)}
     ${s.letters.length ? `<div class="card ${s.letters[0].read ? "" : "highlight"}"><h2>来信 ${s.letters.some((l) => !l.read) ? '<span class="pill">未读</span>' : ""}</h2>
       ${s.letters.slice(0, 4).map((l) => `<div class="row"><span>${l.date.slice(5)} 的周信</span><button class="small" data-act="letter" data-v="${l.date}">${l.read ? "再看看" : "打开"}</button></div>`).join("")}
     </div>` : ""}
@@ -612,6 +619,19 @@ function renderToday(s: GameState): string {
     ${bossToday ? `<div class="card"><h2>周 Boss</h2>${battleSummary(bossToday, true)}</div>` : ""}
     ${renderChat(s)}
     <div class="card"><h2>动态</h2><ul class="feed">${s.feed.slice(0, 12).map((f) => `<li><span class="muted">${f.date.slice(5)}</span> ${f.text}</li>`).join("")}</ul></div>
+  </div>`;
+}
+
+/** Today's open wish, if any. */
+const openWish = (s: GameState): Wish | undefined => (s.trial === "offered" ? undefined : s.wishes.find((w) => w.date === s.today && w.kept === undefined));
+
+function renderWish(s: GameState): string {
+  const w = openWish(s);
+  const kept = s.wishes.filter((x) => x.kept).length;
+  if (!w) return "";
+  return `<div class="card"><h2>今天的小心愿 <span class="pill">${WISH_LABEL[w.kind]}</span></h2>
+    <p>${w.text}</p>
+    <p class="muted" style="font-size:12px">可选的，没做到也没关系，什么都不会扣。做到了明早有成长值，偶尔还会让第二天更容易遇到野怪。难度按你最近两周自己的水平定。已经实现过 ${kept} 个心愿。</p>
   </div>`;
 }
 
@@ -696,11 +716,11 @@ function renderPet(s: GameState): string {
 }
 
 function renderCollection(s: GameState): string {
-  const all = Object.values(ITEMS).flat();
+  const all = [...Object.values(ITEMS).flat(), ...TREASURE_ITEMS];
   const got = all.filter((i) => s.collection[i]);
   return `<div class="card"><h2>收藏册 ${got.length} / ${all.length}</h2>
     <div class="items">${all.map((i) => `<span class="item ${s.collection[i] ? "" : "locked"}" title="${i}">${s.collection[i] ? `${SURPRISE_ICON.item} ${i}${s.collection[i]! > 1 ? ` ×${s.collection[i]}` : ""}` : "？？"}</span>`).join("")}</div>
-    <p class="muted" style="font-size:12px">没遇到野怪的早上会捡到小东西，跟昨天最突出的那件事有关。只是收藏，不加战斗力。</p>
+    <p class="muted" style="font-size:12px">没遇到野怪的早上会捡到小东西，跟昨天最突出的那件事有关；最后 ${TREASURE_ITEMS.length} 件只能从藏宝图的宝箱里开出来。只是收藏，不加战斗力。</p>
     <h3>会的动作</h3>
     <p>${s.moves.length ? s.moves.map((mv) => MOVE_NAME[mv]).join("、") : '<span class="muted">还没学会，过几天看看</span>'}</p>
   </div>`;

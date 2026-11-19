@@ -2,6 +2,7 @@ import type { EchoType, Stat } from "@pulseling/engine";
 import type { GameState } from "./state";
 import { speciesName, STAT_NAME } from "./text";
 import { SURPRISE_ICON, SURPRISE_LABEL } from "./surprise";
+import { WISH_LABEL, wishResultLine } from "./wish";
 
 /** The morning card (07 §1): last night → yesterday's highlights → growth → surprise. At most 3 numbers. */
 export interface MorningCard {
@@ -16,6 +17,10 @@ export interface MorningCard {
   from: number;
   to: number;
   surprise: { kind: "capture" | "seen" | "escaped" | "small"; label: string; text: string; short: string };
+  /** Extra news lines: yesterday's wish, an opened treasure chest, why the encounter was different. */
+  extras: { text: string; good: boolean }[];
+  /** Today's optional wish. */
+  wish?: { label: string; text: string; short: string };
 }
 
 const STAT_OF: Record<EchoType, Stat> = {
@@ -82,5 +87,11 @@ export function morningCard(s: GameState, progress: number, threshold: number): 
         ? { kind: "seen", label: "遇到野怪", text: `又碰到了${name}`, short: `又碰到${name}` }
         : { kind: "escaped", label: "遇到野怪", text: `${name}跑掉了，图鉴里留下了剪影`, short: `${name}跑掉了` };
 
-  return { date: m.date, night, highlights, headline: highlights[0]!, gain, from, to, surprise };
+  const extras: MorningCard["extras"] = [];
+  if (m.wishResult) extras.push({ text: wishResultLine(m.wishResult).text, good: !!m.wishResult.kept });
+  if (m.treasure) extras.push({ text: `宝箱打开了！得到「${m.treasure.item}」，成长值 +${m.treasure.growth}`, good: true });
+  for (const b of m.boosts ?? []) extras.push({ text: b, good: true });
+  const wish = m.wish ? { label: WISH_LABEL[m.wish.kind], text: m.wish.text, short: m.wish.short } : undefined;
+
+  return { date: m.date, night, highlights, headline: highlights[0]!, gain, from, to, surprise, extras, wish };
 }

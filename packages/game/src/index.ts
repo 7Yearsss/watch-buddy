@@ -3,6 +3,7 @@ export * from "./state";
 export * from "./text";
 export * from "./talk";
 export * from "./surprise";
+export * from "./wish";
 export * from "./card";
 export * from "./glance";
 export * from "./daynight";

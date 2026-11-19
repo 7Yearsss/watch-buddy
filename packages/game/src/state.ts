@@ -44,7 +44,8 @@ import {
   type Tactic,
 } from "@pulseling/engine";
 import { RARITY_NAME, skillName, speciesName, TYPE_NAME, VARIANT_NAME } from "./text";
-import { pickSurprise, type IdleMove, type Surprise } from "./surprise";
+import { pickSurprise, TREASURE_ITEMS, type IdleMove, type Surprise } from "./surprise";
+import { firstWish, pickWish, wishKept, wishResultLine, wishReward, WISH_GROWTH, type Wish } from "./wish";
 import { CHATS_PER_DAY, promiseKept, promiseLine, replyLine, weeklyLetter, type PromiseKind, type ReplyId } from "./talk";
 
 
@@ -67,6 +68,14 @@ export interface MorningReport {
   newSkill?: SkillId;
   /** Mornings without a wild monster get one small surprise. */
   surprise?: Surprise;
+  /** Today's optional wish, if the pet has one. */
+  wish?: Wish;
+  /** Yesterday's wish, checked against yesterday's data. */
+  wishResult?: Wish;
+  /** A treasure chest that opened this morning. */
+  treasure?: { item: string; growth: number };
+  /** Why this morning's encounter was different (meteor, kept wish, guest, weather). */
+  boosts: string[];
 }
 
 export interface BossReport extends BattleReport {
@@ -120,6 +129,12 @@ export interface GameState {
   friendBattles: { date: string; friendId: string; won: boolean; charge: number }[];
   /** The weekly boss waits all day for a tap on the watch; unfought by night, it resolves on its own (no charge). */
   bossPending: { date: string; type: EchoType } | null;
+  /** Daily wishes, newest first. */
+  wishes: Wish[];
+  /** Effects queued for one specific morning's encounter roll. */
+  tomorrow: { date: string; luck?: string; guest?: string; weather?: EchoType } | null;
+  /** Treasure maps waiting to open. */
+  treasures: { opensOn: string }[];
 }
 
 export type DayInput = Omit<DailyHealth, "date">;
@@ -162,6 +177,9 @@ export function createGame(input: { userId: string; starter: Starter; installDat
     moves: [],
     friendBattles: [],
     bossPending: null,
+    wishes: [firstWish(installDate)],
+    tomorrow: null,
+    treasures: [],
   };
 }
 
@@ -207,6 +225,20 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
   s.results.push(settled.result);
   if (settled.result.worn) s.qualities.push(settled.result.quality);
 
+  // Yesterday's wish: optional, so only keeping it changes anything.
+  const wish = s.wishes.find((w) => w.date === date && w.kept === undefined);
+  if (wish) {
+    wish.kept = wishKept(wish, day);
+    if (wish.kept) {
+      wish.reward = wishReward(s.userId, wish);
+      addGrowth(s, WISH_GROWTH);
+      if (wish.reward === "luck") queueFor(s, addDays(date, 1), { luck: "心愿实现" });
+      const line = wishResultLine(wish);
+      s.pendingShort ??= line.short;
+      s.feed.unshift({ date: addDays(date, 1), text: line.text, kind: "info" });
+    }
+  }
+
   const st = evolutionStatus(s.pet, s.history, date, cfg);
   if (st.auto) s.pet = evolve(s.pet, st, st.auto, date);
   bump(s, before);
@@ -222,18 +254,30 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
   const recent7 = s.history.slice(-7);
   const aff7 = lifestyleAffinity(recent7, cfg);
   const aff14 = lifestyleAffinity(s.history.slice(-14), cfg);
-  const encounter = rollEncounter(
-    {
-      userId: s.userId,
-      date: morning,
-      daysSinceLastEncounter: s.daysSinceEncounter,
-      affinity: aff7,
-      echoes: settled.result.echoes,
-      weeklyEnergyFraction: weeklyEnergyFraction(weeklyEnergy(s.results, date), cfg),
-      dragonEligible: adultOptions(aff7, aff14, cfg).find((o) => o.variant === "dragon")!.met,
-    },
-    cfg,
-  );
+  // Effects queued by yesterday's events: a lucky morning (meteor / kept wish), a guest, or weather.
+  const fx = s.tomorrow?.date === morning ? s.tomorrow : null;
+  if (s.tomorrow && s.tomorrow.date <= morning) s.tomorrow = null;
+  const boosts: string[] = [];
+  const guest = fx?.guest ? WILD_ROSTER.find((sp) => sp.id === fx.guest) : undefined;
+  const rollCfg = fx?.luck ? { ...cfg, encounter: { ...cfg.encounter, chance: Math.min(0.9, cfg.encounter.chance * 2) } } : cfg;
+  const affinity = fx?.weather ? { ...aff7, [fx.weather]: (aff7[fx.weather] ?? 0) + 1.5 } : aff7;
+  const encounter = guest
+    ? { species: guest, shiny: false }
+    : rollEncounter(
+        {
+          userId: s.userId,
+          date: morning,
+          daysSinceLastEncounter: s.daysSinceEncounter,
+          affinity,
+          echoes: settled.result.echoes,
+          weeklyEnergyFraction: weeklyEnergyFraction(weeklyEnergy(s.results, date), cfg),
+          dragonEligible: adultOptions(aff7, aff14, cfg).find((o) => o.variant === "dragon")!.met,
+        },
+        rollCfg,
+      );
+  if (guest) boosts.push("借宿的野怪来比试了");
+  else if (fx?.luck) boosts.push(`${fx.luck}的好运：遇到野怪的机会翻倍`);
+  if (!guest && fx?.weather) boosts.push(`${TYPE_NAME[fx.weather]}系野怪变多了`);
   s.daysSinceEncounter = encounter ? 0 : s.daysSinceEncounter + 1;
   s.lastEchoes = settled.result.echoes;
 
@@ -259,7 +303,8 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
   let surprise: Surprise | undefined;
   if (!encounter) {
     const uncapturedTypes = [...new Set(WILD_ROSTER.filter((sp) => !s.dex[sp.id]?.captured).map((sp) => sp.type as EchoType))].filter((t) => t !== ("dragon" as string));
-    surprise = pickSurprise({ userId: s.userId, date: morning, pet: s.pet, echoes: settled.result.echoes, history: s.history, uncapturedTypes, recent: s.surprises.slice(0, 3), moves: s.moves, lastMoveDate: s.surprises.find((x) => x.kind === "move")?.date });
+    const guestCandidates = WILD_ROSTER.filter((sp) => sp.type !== "dragon" && !s.dex[sp.id]?.captured).map((sp) => sp.id);
+    surprise = pickSurprise({ userId: s.userId, date: morning, pet: s.pet, echoes: settled.result.echoes, history: s.history, uncapturedTypes, recent: s.surprises.slice(0, 3), moves: s.moves, lastMoveDate: s.surprises.find((x) => x.kind === "move")?.date, guestCandidates, treasurePending: s.treasures.length > 0 });
     s.surprises.unshift(surprise);
     s.surprises = s.surprises.slice(0, 30);
     if (surprise.item) s.collection[surprise.item] = (s.collection[surprise.item] ?? 0) + 1;
@@ -267,9 +312,35 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
       s.moves.push(surprise.move);
       s.feed.unshift({ date: morning, text: surprise.text.replace("！点点我看看", "！"), kind: "info" });
     }
+    const next = addDays(morning, 1);
+    if (surprise.kind === "meteor") queueFor(s, next, { luck: "流星雨" });
+    if (surprise.guest) queueFor(s, next, { guest: surprise.guest });
+    if (surprise.weather) queueFor(s, next, { weather: surprise.weather });
+    if (surprise.opensOn) s.treasures.push({ opensOn: surprise.opensOn });
+  }
+
+  let treasure: MorningReport["treasure"];
+  const chest = s.treasures.find((t) => t.opensOn <= morning);
+  if (chest) {
+    s.treasures = s.treasures.filter((t) => t !== chest);
+    const item = TREASURE_ITEMS[hashStr(`${s.userId}:${morning}:treasure`) % TREASURE_ITEMS.length]!;
+    s.collection[item] = (s.collection[item] ?? 0) + 1;
+    addGrowth(s, TREASURE_GROWTH);
+    treasure = { item, growth: TREASURE_GROWTH };
+    s.feed.unshift({ date: morning, text: `宝箱打开了：「${item}」，成长值 +${TREASURE_GROWTH}`, kind: "info" });
+  }
+
+  const todayWish = pickWish(s.userId, morning, s.history, s.wishes);
+  if (todayWish) {
+    s.wishes.unshift(todayWish);
+    s.wishes = s.wishes.slice(0, 30);
   }
   s.morning = {
     surprise,
+    wish: todayWish ?? undefined,
+    wishResult: wish,
+    treasure,
+    boosts,
     date: morning,
     sleepMinutes: day.sleepMinutes,
     encounter: !!encounter,
@@ -297,15 +368,32 @@ export function liveDay(prev: GameState, input: DayInput): GameState {
 }
 
 const WAKE_GIFT = 15;
+const TREASURE_GROWTH = 10;
+
+/** Extra growth from gifts (wake-up, wishes, treasure); never pushes past the current evolution threshold. */
+function addGrowth(s: GameState, n: number) {
+  const t = stageThreshold(s.pet.stage, cfg);
+  s.pet.progress = t ? Math.min(t.threshold, s.pet.progress + n) : s.pet.progress;
+  s.pet.totalGrowth += n;
+}
+
+/** Queue an effect for one morning's encounter roll, merging with anything already queued for that morning. */
+function queueFor(s: GameState, date: string, fx: Omit<NonNullable<GameState["tomorrow"]>, "date">) {
+  s.tomorrow = { ...(s.tomorrow?.date === date ? s.tomorrow : {}), ...fx, date };
+}
+
+function hashStr(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
 
 /** Waking from hibernation never punishes: the pet keeps everything and brings a small gift. */
 export function startTrial(prev: GameState): GameState {
   const s: GameState = structuredClone(prev);
   s.trial = "active";
   if (s.hibernatedDays > 0) {
-    const t = stageThreshold(s.pet.stage, cfg);
-    s.pet.progress = t ? Math.min(t.threshold, s.pet.progress + WAKE_GIFT) : s.pet.progress;
-    s.pet.totalGrowth += WAKE_GIFT;
+    addGrowth(s, WAKE_GIFT);
     s.pendingLine = `我睡了 ${s.hibernatedDays} 天，梦里一直在找你。送你一份礼物！`;
     s.pendingShort = "我醒啦！";
     s.feed.unshift({ date: s.today, text: `醒来了，带回一份礼物：成长值 +${WAKE_GIFT}`, kind: "info" });
@@ -452,5 +540,9 @@ export function migrate(s: GameState): GameState {
   s.moves ??= [];
   s.friendBattles ??= [];
   s.bossPending ??= null;
+  s.wishes ??= [];
+  s.tomorrow ??= null;
+  s.treasures ??= [];
+  if (s.morning) s.morning.boosts ??= [];
   return s;
 }
