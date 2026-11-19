@@ -1,6 +1,6 @@
-import type { AdultVariant, Cosmetics, ElementType } from "@pulseling/engine";
+import type { AdultVariant, Cosmetics, ElementType, Rarity } from "@pulseling/engine";
 
-export const GRID = 40;
+export const GRID = 48;
 
 interface Palette {
   main: string;
@@ -54,6 +54,10 @@ const shinyOf = (p: Palette): Palette => ({
   belly: hueShift(p.belly, 150),
 });
 
+export type SpriteAction = "idle" | "happy" | "sleepy" | "bored" | "talk" | "attack" | "hit" | "sleep";
+/** Frames per action, from the art spec. Callers advance `frame`; the sprite loops within this count. */
+export const ACTION_FRAMES: Record<SpriteAction, number> = { idle: 4, happy: 4, sleepy: 2, bored: 2, talk: 2, attack: 3, hit: 2, sleep: 2 };
+
 export interface SpriteSpec {
   primary: ElementType;
   secondary?: ElementType | null;
@@ -62,8 +66,14 @@ export interface SpriteSpec {
   shiny?: boolean;
   cosmetics?: Cosmetics;
   mood?: "happy" | "sleepy" | "bored";
+  /** Frame-based action (07 §5). Overrides mood for eyes, mouth and motion. */
+  action?: SpriteAction;
+  /** Always-On: darkened, no rarity light. */
+  dim?: boolean;
   /** Pulsing outline when evolution is close. */
   glow?: boolean;
+  /** Rarity light: white glow that grows by tier; legendary is the only rainbow (see 07 §3). */
+  rarity?: Rarity;
   /** Varies the silhouette of wild monsters. */
   seed?: string;
   frame: number;
@@ -155,28 +165,39 @@ export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
   if (second && spec.shiny) second = shinyOf(second);
   const f = spec.frame;
   const phase = f % 4;
-  const lift = phase === 1 ? -1 : 0;
-  const squash = phase === 3 ? 1 : 0;
+  const action: SpriteAction = spec.action ?? (spec.mood === "sleepy" ? "sleepy" : spec.mood === "bored" ? "bored" : "idle");
+  const af = f % ACTION_FRAMES[action];
+  let lift = 0, squash = 0, dx = 0;
+  switch (action) {
+    case "idle": lift = phase === 1 ? -1 : 0; squash = phase === 3 ? 1 : 0; break;
+    case "happy": lift = [-4, -2, 0, 0][af]!; squash = af === 3 ? 1 : 0; break;
+    case "talk": lift = af === 1 ? -1 : 0; break;
+    case "sleepy": lift = af; break;
+    case "bored": squash = 2; break;
+    case "sleep": squash = af === 0 ? 1 : 2; break;
+    case "attack": dx = [1, 4, 2][af]!; lift = af === 1 ? -1 : 0; break;
+    case "hit": dx = af === 0 ? -3 : -1; break;
+  }
   const L = new Layer();
-  const cx = 20;
+  const cx = 24 + dx;
 
   if (spec.stage === "egg") {
     const wobble = phase === 1 ? -1 : phase === 3 ? 1 : 0;
-    L.ellipse(cx + wobble * 0.3, 23, 8, 10, pal);
+    L.ellipse(cx + wobble * 0.3, 28, 10, 12, pal);
     L.render(ctx);
-    const zig = [[-7, 22], [-4, 20], [-1, 22], [2, 20], [5, 22], [7, 21]];
+    const zig = [[-9, 27], [-6, 25], [-3, 27], [0, 25], [3, 27], [6, 25], [9, 26]];
     ctx.fillStyle = pal.dark;
     for (const [x, y] of zig) ctx.fillRect(cx + x!, y!, 1, 1);
     ctx.fillStyle = pal.belly;
-    ctx.fillRect(cx - 4, 17, 2, 2);
+    ctx.fillRect(cx - 5, 20, 2, 3);
     return;
   }
 
-  const size = { baby: 7, juvenile: 9, adult: 11, wild: 9 }[spec.stage];
+  const size = { baby: 8, juvenile: 11, adult: 13, wild: 11 }[spec.stage];
   const wildShape = spec.stage === "wild" ? hash(spec.seed ?? spec.primary) % 3 : 0;
   const rx = size + squash + (wildShape === 2 ? 1 : 0);
   const ry = size - 1 - squash + (wildShape === 1 ? 1 : 0);
-  const groundY = 34;
+  const groundY = 41;
   const cy = groundY - ry - (spec.stage === "baby" ? 1 : 3) + lift;
   const top = cy - ry;
 
@@ -184,11 +205,7 @@ export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
   for (let x = -rx + 1; x <= rx - 1; x++) ctx.fillRect(cx + x, groundY + 1, 1, 1);
   for (let x = -rx + 3; x <= rx - 3; x++) ctx.fillRect(cx + x, groundY + 2, 1, 1);
 
-  if (spec.cosmetics?.aura) {
-    const rr = rx + 6 + (phase < 2 ? 0 : 1);
-    ctx.fillStyle = "#ffe680";
-    for (let a = 0; a < 360; a += 10) ctx.fillRect(Math.round(cx + Math.cos((a * Math.PI) / 180) * rr), Math.round(cy + Math.sin((a * Math.PI) / 180) * (ry + 6)), 1, 1);
-  }
+  if (!spec.dim) drawRarityLight(ctx, spec.rarity ?? (spec.cosmetics?.aura ? "legendary" : "common"), cx, cy, rx, ry, groundY, f);
 
   const v = spec.stage === "adult" ? spec.variant ?? "pure" : undefined;
 
@@ -251,12 +268,21 @@ export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
   const eyeY = cy - Math.round(ry * 0.2);
   const eyeX = Math.max(2, Math.round(rx * 0.42));
   const eyes = spec.cosmetics?.eyes;
-  const blink = f % 9 === 0;
-  const sleepy = spec.mood === "sleepy" || eyes === "sleepy";
+  const canBlink = action === "idle" || action === "talk" || action === "attack";
+  const blink = canBlink && f % 9 === 0;
+  const closed = action === "sleep" || blink;
+  const halfLid = action === "sleepy" || action === "bored" || (eyes === "sleepy" && action === "idle");
   for (const s of [-1, 1]) {
     const x = cx + s * eyeX;
-    if (sleepy || blink) {
+    if (closed) {
       L.rect(x - 1, eyeY + 1, 3, 1, pal.outline);
+    } else if (action === "happy") {
+      L.dot(x - 1, eyeY + 1, pal.outline); L.dot(x, eyeY, pal.outline); L.dot(x + 1, eyeY + 1, pal.outline);
+    } else if (action === "hit") {
+      const t = s < 0 ? x - 1 : x + 1;
+      L.dot(t, eyeY - 1, pal.outline); L.dot(x, eyeY, pal.outline); L.dot(t, eyeY + 1, pal.outline);
+    } else if (halfLid) {
+      L.rect(x - 1, eyeY + 1, 3, 2, pal.outline);
     } else if (eyes === "heart") {
       L.dot(x - 1, eyeY, "#e0466e"); L.dot(x + 1, eyeY, "#e0466e");
       L.rect(x - 1, eyeY + 1, 3, 1, "#e0466e");
@@ -266,10 +292,16 @@ export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
       L.dot(x - 1, eyeY - 1, "#ffffff");
       if (eyes === "star") L.dot(x + 1, eyeY + 2, "#ffe066");
       if (eyes === "sparkle") { L.dot(x, eyeY - 1, "#ffffff"); if (f % 2) L.dot(x - 2, eyeY - 2, "#ffffff"); }
+      if (action === "attack") { L.dot(x - s, eyeY - 3, pal.outline); L.dot(x, eyeY - 2, pal.outline); L.dot(x + s, eyeY - 2, pal.outline); }
     }
     L.rect(x + s * 2 - (s > 0 ? 1 : 0), eyeY + 3, 2, 1, "#f59aa8");
   }
-  if (spec.mood === "bored") L.rect(cx - 1, eyeY + 4, 3, 1, pal.outline);
+  if (action === "talk" && af === 1) { L.rect(cx - 1, eyeY + 3, 3, 2, pal.outline); L.dot(cx, eyeY + 4, "#e0466e"); }
+  else if (action === "happy") { L.rect(cx - 2, eyeY + 3, 5, 1, pal.outline); L.rect(cx - 1, eyeY + 4, 3, 1, "#e0466e"); }
+  else if (action === "attack") L.rect(cx - 1, eyeY + 3, 2, 2, pal.outline);
+  else if (action === "hit") { L.dot(cx - 1, eyeY + 4, pal.outline); L.dot(cx, eyeY + 3, pal.outline); L.dot(cx + 1, eyeY + 4, pal.outline); }
+  else if (action === "sleep") L.dot(cx, eyeY + 4, pal.outline);
+  else if (spec.mood === "bored" || action === "bored") L.rect(cx - 1, eyeY + 4, 3, 1, pal.outline);
   else if (spec.mood === "happy") {
     L.dot(cx - 1, eyeY + 3, pal.outline); L.dot(cx, eyeY + 4, pal.outline); L.dot(cx + 1, eyeY + 3, pal.outline);
   } else L.dot(cx, eyeY + 4, pal.outline);
@@ -308,4 +340,54 @@ export function drawSprite(canvas: HTMLCanvasElement, spec: SpriteSpec) {
   }
 
   L.render(ctx);
+
+  if (action === "sleep" || action === "sleepy") {
+    // little floating "z"
+    const zx = cx + rx + 1, zy = top - 1 - (Math.floor(f / 2) % 3);
+    ctx.fillStyle = spec.dim ? "#8a8fb0" : "#ffffff";
+    if (action === "sleep" || f % 4 < 2) for (const [x, y] of [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]]) ctx.fillRect(zx + x!, zy + y!, 1, 1);
+  }
+  if (action === "hit" && af === 0) tint(ctx, "rgba(255,255,255,0.7)");
+  if (spec.dim) tint(ctx, "rgba(8,10,40,0.6)");
+}
+
+/** Recolour every drawn pixel (hit flash, Always-On dimming). */
+function tint(ctx: CanvasRenderingContext2D, color: string) {
+  ctx.save();
+  ctx.globalCompositeOperation = "source-atop";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, GRID, GRID);
+  ctx.restore();
+}
+
+const RAINBOW = ["#ff6b6b", "#ffb347", "#ffe66b", "#7be07b", "#6bc8ff", "#9f8bff", "#ff8be0"];
+const TIER: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+
+/** Rarity as light shape, not hue: type colours already use green/blue/purple/yellow. */
+function drawRarityLight(ctx: CanvasRenderingContext2D, rarity: Rarity, cx: number, cy: number, rx: number, ry: number, groundY: number, f: number) {
+  const tier = TIER[rarity];
+  if (tier === 0) return;
+  const px = (x: number, y: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); };
+  // tier 1+: soft white glow on the ground
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  for (let x = -rx - 1; x <= rx + 1; x++) if ((x + f) % 2 === 0) ctx.fillRect(cx + x, groundY + 3, 1, 1);
+  if (tier < 2) return;
+  // tier 2+: ring
+  const rr = rx + 5, rv = ry + 5;
+  for (let a = 0; a < 360; a += 8) {
+    const t = (a * Math.PI) / 180;
+    const c = tier === 4 ? RAINBOW[(Math.floor(a / 8) + f) % RAINBOW.length]! : tier === 3 && (a / 8 + f) % 6 === 0 ? "#ffffff" : "rgba(255,255,255,0.55)";
+    px(cx + Math.cos(t) * rr, cy + Math.sin(t) * rv, c);
+  }
+  // sparkles: still for rare, orbiting for epic+
+  const n = tier === 2 ? 3 : tier === 3 ? 4 : 6;
+  for (let k = 0; k < n; k++) {
+    const base = (k * 360) / n + (tier >= 3 ? f * 15 : 20);
+    const t = (base * Math.PI) / 180;
+    const x = cx + Math.cos(t) * (rr + 2), y = cy + Math.sin(t) * (rv + 2);
+    const c = tier === 4 ? "#fff6b0" : "#ffffff";
+    if (tier === 2 && (f + k) % 3 === 0) continue;
+    px(x, y, c);
+    if (tier >= 3) { px(x - 1, y, c); px(x + 1, y, c); px(x, y - 1, c); px(x, y + 1, c); }
+  }
 }

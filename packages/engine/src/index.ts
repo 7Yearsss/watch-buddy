@@ -16,3 +16,4 @@ export * from "./weekly";
 export * from "./encounter";
 export * from "./opponents";
 export { addDays, daysBetween } from "./util";
+export * from "./friends";

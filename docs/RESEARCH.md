@@ -73,12 +73,38 @@ HealthKit 数据
 - 成人每晚至少 7 小时睡眠（CDC 和美国睡眠医学会的共识）。
 - 健康成人深睡约占整晚的 13–23%，随年龄下降（单一临床机构文章，非正式指南，仅作参考）。
 
+## 4. 打磨调研（2026-11）
+
+具体落地写在 [design/07-打磨规范.md](design/07-打磨规范.md)。
+
+- **数据 → 奖励怎么让人看懂：** Pokémon Sleep 把睡眠分 × 卡比兽强度压成"催眠能量"，早上直接变成来了几只宝可梦（最少 3 只）；Pikmin Bloom 每天生成"一天的回顾"动画，汇总步数、走过的地方、种的花，图标还会随步数里程碑变化。共同点：一个总结、一个结果，不让玩家读数字。
+- **没有大奖的日子：** Finch 用"完成任务 → 小鸟去冒险 → 回来讲故事"的约会机制，奖励的种类、颜色、庆祝动画都会变化（也有评论批评它没解释清楚能量和彩虹石是什么）。动物森友会被分析为"可预期的日常 + 偶尔的意外"，可预期的小胜利和惊喜同样重要；但每天打卡的设计也会让人中断后有负担。
+- **大事件演出：** 抽卡和开卡包的设计经验：真正的兴奋来自揭晓前的期待；颜色是稀有度暗号；先停一拍再揭晓更有力；太快显得廉价，太慢让人走神；很多游戏跳过铺垫，浪费了戏剧性。宝可梦的进化主要靠发光，看不清具体变形过程。
+- **手表震动：** Apple 规范要求震动强弱和动画匹配、不要滥用，并且按系统预设类型的固定含义使用（`notification`、`directionUp`、`directionDown`、`success`、`failure`、`retry`、`start`、`stop`、`click` 等）。
+- **像素角色：** 先过剪影测试（涂黑仍能认出）；小尺寸提高对比，眼睛和嘴就能表达基本情绪，眼睛挪 1 像素印象就变；头大身小；待机 2–3 个状态即可，弹跳用压扁 / 拉伸 / 还原。没找到拓麻歌子精灵设计的专门资料。
+
 ## 来源
 - [WHO 身体活动说明](https://www.who.int/europe/news-room/fact-sheets/item/physical-activity)
 - [WHO 推荐的运动量（EMRO）](https://www.emro.who.int/health-education/physical-activity/promoting-physical-activity/What-is-the-recommended-amount-of-exerci.html)
 - [CDC：约三成美国成人睡眠不足 7 小时（ABC30）](https://abc30.com/post/cdc-report-finds-third-us-adults-not-getting-enough-sleep/19100094/)
 - [深睡需要多少（Healthline）](https://www.healthline.com/health/how-much-deep-sleep-do-you-need)
 - [睡眠实验室的深睡数据（Acibadem）](https://acibademinternational.com/?p=345645)
+- [Pokémon Sleep 免费功能和催眠能量（Game8）](https://game8.co/games/Pokemon-Sleep/archives/418682)
+- [Pikmin Bloom 一天的回顾（Niantic 帮助中心）](https://niantic.helpshift.com/hc/en/23-pikmin-bloom/faq/2859-daily-lookback)
+- [Pikmin Bloom Lifelog（Pikmin Wiki）](https://pikminwiki.com/Lifelog)
+- [Finch 小组件与约会机制（Deconstructor of Fun）](https://www.deconstructoroffun.com/blog/x0hd2ssr80y5n7gv0w967pg7hwd7tl)
+- [Finch 设计评析（Pratt IXD）](https://ixd.prattsi.org/2024/09/design-critique-finch-ios-app)
+- [动物森友会六年回顾（Spawning Point）](https://spawningpoint.com/article/animal-crossing-new-horizons-six-year-retrospective)
+- [动物森友会机制研究（Journal of Game Studies）](https://systems.enpress-publisher.com/index.php/JGS/article/download/11616/5564)
+- [抽卡动画的视觉文化分析（多伦多都会大学）](https://pressbooks.library.torontomu.ca/visualculture-howtosee/chapter/chapter-6/)
+- [开卡包演出的编排（N3TWORK）](https://medium.com/n3twork/choreographed-emotion-6-steps-to-a-great-card-reveal-ux-a6e6bb8487dd)
+- [抽卡揭晓的心理（GuruGamer）](https://gurugamer.com/mobile-games/the-actual-psychology-behind-why-a-banner-pull-feels-so-good-27122)
+- [宝可梦进化（Bulbapedia）](https://bulbapedia.bulbagarden.net/wiki/Evolution)
+- [WKHapticType（Apple）](https://developer.apple.com/documentation/watchkit/wkhaptictype)
+- [播放触感（Apple 设计规范）](https://developer-mdn.apple.com/design/human-interface-guidelines/patterns/playing-haptics)
+- [让像素画清晰可读（Bugnet）](https://bugnet.io/blog/how-to-make-pixel-art-that-reads-clearly)
+- [剪影测试（Free Game Sprites）](https://freegamesprites.com/pt/news/sprite-silhouette-test-character-readability)
+- [像素动画指南（WigglyPaint）](https://wigglypaint.com/blog/pixel-art-animation-guide/)
 - [Digimon Vital Bracelet review（Inverse）](https://www.inverse.com/input/reviews/digimon-vital-bracelet-review-fitness-meets-digital-monsters)
 - [Vital Hero review（The Toy Insider）](https://thetoyinsider.com/vital-hero-review/)
 - [Vital Bracelet SP 说明书](https://p-bandai.com/us/contents/div/2030/images/VITAL%20BRACE_SP_manual_EN2.pdf)
@@ -93,3 +119,10 @@ HealthKit 数据
 - [游戏化健身参与度研究（CHI 2017）](https://www.csit.carleton.ca/~arya/pubs/chi-2017.pdf)
 - [健身 RPG 应用对比（FitCraft）](https://getfitcraft.com/guides/fitness-rpg-apps)
 - [shanwangwsd/virtualpet（GitHub）](https://github.com/shanwangwsd/virtualpet)
+
+## 5. 对战调研（好友切磋）
+
+- 自走棋常见"幽灵对手"：Mythic Legends 会记录玩家的阵容，拿来当别人的对手；Narnok、Flawed Tactics 等也打其他玩家保存的阵容。可以异步、不用同时在线。来源：[GamesRadar: Mythic Legends](https://www.gamesradar.com/how-mythic-legends-re-invents-the-auto-battler)、[nodal.gg 上的自走棋列表](https://nodal.gg/game/2680510)
+- 数码宝贝 Vital Bracelet：对战结果由宠物当前状态和属性决定；好友对战靠 Dim 卡转移宠物；App 内对战是简单的按时机小游戏。来源：[Vital Bracelet 说明书](https://p-bandai.com/us/contents/div/2030/images/VITAL%20BRACE_SP_manual_EN2.pdf)、[Inverse 评测](https://nc.inverse.com/input/reviews/digimon-vital-bracelet-review-fitness-meets-digital-monsters)、[Screen Rant](https://screenrant.com/digimon-vital-hero-bracelet-facts/)
+- 我们不学的地方：Vital Bracelet 输了会扣点数、宠物会受伤，跟"只加不减"冲突。
+- 这次调研的资料多是商店页面和评测，缺少"玩家为什么爱看自动战斗"的数据，需要以后用原型测。

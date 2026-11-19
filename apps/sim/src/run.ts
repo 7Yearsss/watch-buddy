@@ -57,9 +57,11 @@ export interface Outcome {
   encounters: number;
   wild: { rarity: Rarity; won: boolean }[];
   bosses: { matchup: Matchup; won: boolean; countered: boolean }[];
+  /** Pet as of selected days (for friend-battle checks). */
+  snapshots: Map<number, { pet: PetState; qualities: number[]; learned: SkillId[] }>;
 }
 
-function pickLoadout(pet: PetState, learned: SkillId[], opponent: ElementType[], engaged: boolean): { loadout: SkillId[]; countered: boolean } {
+export function pickLoadout(pet: PetState, learned: SkillId[], opponent: ElementType[], engaged: boolean): { loadout: SkillId[]; countered: boolean } {
   const base = defaultLoadout(pet);
   if (!engaged) return { loadout: base, countered: false };
   const known = knownSkills(pet, learned);
@@ -73,7 +75,7 @@ function pickLoadout(pet: PetState, learned: SkillId[], opponent: ElementType[],
 
 const PREFERENCE: AdultVariant[] = ["dragon", "flying", "fighting", "ground"];
 
-export function simulateUser(user: SimUser, days: number, seed: string, cfg: EngineConfig): Outcome {
+export function simulateUser(user: SimUser, days: number, seed: string, cfg: EngineConfig, snapshotDays: number[] = []): Outcome {
   const history = makeDays(user, addDays(INSTALL, -HISTORY_DAYS), HISTORY_DAYS + days, seed);
   let pet = hatch({ id: user.id, starter: user.starter, date: INSTALL, history: history.slice(0, HISTORY_DAYS) }, cfg).pet;
   const engaged = createRng(`${user.id}:engaged`)() < 0.6;
@@ -93,6 +95,7 @@ export function simulateUser(user: SimUser, days: number, seed: string, cfg: Eng
     encounters: 0,
     wild: [],
     bosses: [],
+    snapshots: new Map(),
   };
 
   const results: DayResult[] = [];
@@ -169,6 +172,7 @@ export function simulateUser(user: SimUser, days: number, seed: string, cfg: Eng
       );
       out.bosses.push({ matchup: bossMatchup(type, petTypes(pet)), won: result.winner === "a", countered });
     }
+    if (snapshotDays.includes(dayNo)) out.snapshots.set(dayNo, { pet, qualities: qualities.slice(-3), learned: [...learned] });
   }
 
   out.finalRarity = pet.rarity;

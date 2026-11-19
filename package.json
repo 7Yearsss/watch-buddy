@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/engine --noEmit && tsc -p apps/sim --noEmit && tsc -p apps/web --noEmit",
+    "typecheck": "tsc -p packages/engine --noEmit && tsc -p packages/game --noEmit && tsc -p apps/sim --noEmit && tsc -p apps/web --noEmit",
     "sim": "pnpm --filter @pulseling/sim sim",
     "web": "pnpm --filter @pulseling/web dev"
   },

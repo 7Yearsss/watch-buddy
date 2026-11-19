@@ -36,6 +36,9 @@ importers:
       '@pulseling/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@pulseling/game':
+        specifier: workspace:*
+        version: link:../../packages/game
       '@pulseling/sim':
         specifier: workspace:*
         version: link:../sim
@@ -45,6 +48,12 @@ importers:
         version: 5.4.11(@types/node@22.10.2)
 
   packages/engine: {}
+
+  packages/game:
+    dependencies:
+      '@pulseling/engine':
+        specifier: workspace:*
+        version: link:../engine
 
 packages:
 

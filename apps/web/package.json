@@ -10,7 +10,8 @@
   "dependencies": {
     "@fontsource/fusion-pixel-12px-proportional-sc": "5.3.0",
     "@pulseling/engine": "workspace:*",
-    "@pulseling/sim": "workspace:*"
+    "@pulseling/sim": "workspace:*",
+    "@pulseling/game": "workspace:*"
   },
   "devDependencies": {
     "vite": "5.4.11"

@@ -1,3 +1,4 @@
+import { CHARGE_MAX_BONUS } from "./friends";
 import { simulateBattle, type BattleResult } from "./battle";
 import type { EngineConfig } from "./config";
 import type { WildSpecies } from "./encounter";
@@ -72,6 +73,8 @@ export interface PetBattleOptions {
   loadout?: SkillId[];
   tactic?: Tactic;
   recentQualities?: number[];
+  /** 0–1 accuracy of the pre-battle tap on the watch; adds up to CHARGE_MAX_BONUS damage, never less. */
+  charge?: number;
 }
 
 /** Daily trial against today's wild monster (or a training dummy). Winning a wild one captures it. */
@@ -93,6 +96,8 @@ export function runWeeklyBoss(
   cfg: EngineConfig,
 ): { opponent: Combatant; result: BattleResult } {
   const opponent = bossCombatant(input.type, petStats(pet), petTypes(pet), cfg);
-  const result = simulateBattle(petCombatant(pet, input, cfg), opponent, `${input.userId}:${input.date}:boss`);
+  const me = petCombatant(pet, input, cfg);
+  me.damageBonus = (me.damageBonus ?? 1) * (1 + CHARGE_MAX_BONUS * Math.max(0, Math.min(1, input.charge ?? 0)));
+  const result = simulateBattle(me, opponent, `${input.userId}:${input.date}:boss`);
   return { opponent, result };
 }

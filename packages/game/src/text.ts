@@ -4,6 +4,9 @@ export const TYPE_NAME: Record<ElementType, string> = {
   grass: "草", water: "水", fire: "火", electric: "电", ground: "地面", fighting: "战斗", flying: "飞行", shadow: "暗影", dragon: "龙",
 };
 export const RARITY_NAME: Record<Rarity, string> = { common: "普通", uncommon: "不普通", rare: "稀有", epic: "史诗", legendary: "传说" };
+/** Rarity is shown as stars + white light, never hue (07 §3). */
+export const RARITY_STARS: Record<Rarity, string> = { common: "★", uncommon: "★★", rare: "★★★", epic: "★★★★", legendary: "★★★★★" };
+export const rarityLabel = (r: Rarity) => `${RARITY_STARS[r]} ${RARITY_NAME[r]}`;
 export const VARIANT_NAME: Record<AdultVariant, string> = {
   pure: "纯系强化", flying: "飞行", fighting: "战斗", ground: "地面", electric: "电", shadow: "暗影", dragon: "龙",
 };
@@ -104,4 +107,18 @@ export function morningLine(p: Personality, sleepMinutes: number | undefined, mo
     chuuni: `${sleep}吾之力量正在苏醒。`,
     chill: `${sleep}早。今天也慢慢来。`,
   });
+}
+
+const STAGE_NAME: Record<string, string> = { egg: "蛋", baby: "幼体", juvenile: "成长体", adult: "成熟体", wild: "野怪" };
+const ACTION_NAME: Record<string, string> = { idle: "", happy: "很开心", sleepy: "有点困", bored: "有点无聊", talk: "在说话", attack: "在攻击", hit: "被打中了", sleep: "在睡觉" };
+
+/** VoiceOver label for a sprite, e.g. "火系成熟体·飞行，史诗，很开心". */
+export function describeSprite(spec: { primary: ElementType; secondary?: ElementType | null; stage: string; variant?: string; rarity?: Rarity; shiny?: boolean; action?: string; mood?: string }): string {
+  const type = TYPE_NAME[spec.primary] + "系" + (spec.secondary ? `·${TYPE_NAME[spec.secondary]}` : "");
+  const parts = [type + (STAGE_NAME[spec.stage] ?? "")];
+  if (spec.rarity && spec.rarity !== "common") parts.push(RARITY_NAME[spec.rarity]);
+  if (spec.shiny) parts.push("闪光");
+  const act = ACTION_NAME[spec.action ?? ""] || (spec.mood === "happy" ? "很开心" : spec.mood === "sleepy" ? "有点困" : spec.mood === "bored" ? "有点无聊" : "");
+  if (act) parts.push(act);
+  return parts.join("，");
 }

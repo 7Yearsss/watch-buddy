@@ -61,11 +61,13 @@ interface Fighter {
   heals: number;
   shields: number;
   slowed: boolean;
+  /** Exponent on type effectiveness for this battle (1 = full chart). */
+  typeScale: number;
 }
 
-const fighter = (c: Combatant): Fighter => {
+const fighter = (c: Combatant, typeScale: number): Fighter => {
   const maxHp = Math.round(c.stats.hp * BATTLE.hpPerStat);
-  return { c, maxHp, hp: maxHp, energy: 0, shieldHits: 0, heals: 0, shields: 0, slowed: false };
+  return { c, maxHp, hp: maxHp, energy: 0, shieldHits: 0, heals: 0, shields: 0, slowed: false, typeScale };
 };
 
 const speedOf = (f: Fighter) => f.c.stats.speed * (f.slowed ? BATTLE.slowFactor : 1);
@@ -74,7 +76,7 @@ function powerAgainst(user: Fighter, target: Fighter, skill: Skill): number {
   const offType = skill.type !== null && !user.c.types.includes(skill.type) ? OFF_TYPE_PENALTY : 1;
   return (
     ((skill.power * user.c.stats.attack) / (target.c.stats.defense + BATTLE.defenseOffset)) *
-    effectiveness(skill.type, target.c.types) *
+    Math.pow(effectiveness(skill.type, target.c.types), user.typeScale) *
     offType *
     (user.c.damageBonus ?? 1)
   );
@@ -147,10 +149,18 @@ function act(me: Fighter, foe: Fighter, skill: Skill, rng: Rng, turn: number, ac
  * Fully automatic 1v1 battle. Deterministic for a given seed, so the server can compute it once and every
  * client replays the same log.
  */
-export function simulateBattle(a: Combatant, b: Combatant, seed: string): BattleResult {
+export interface BattleOptions {
+  /**
+   * Softens the type chart: effectiveness^typeScale. Friend battles use a softer chart because two fixed pets meet
+   * again and again; at full strength a 1.6× vs 0.625× pairing decides the result before it starts.
+   */
+  typeScale?: number;
+}
+
+export function simulateBattle(a: Combatant, b: Combatant, seed: string, opts: BattleOptions = {}): BattleResult {
   const rng = createRng(seed);
-  const fa = fighter(a);
-  const fb = fighter(b);
+  const fa = fighter(a, opts.typeScale ?? 1);
+  const fb = fighter(b, opts.typeScale ?? 1);
   const log: BattleEvent[] = [];
   let turn = 0;
 
