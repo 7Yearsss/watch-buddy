@@ -78,15 +78,16 @@ import { WISH_LABEL, type Wish } from "@pulseling/game";
 
 type Tab = "today" | "pet" | "dex" | "battle" | "data";
 type SliderKey = "steps" | "sleepHours" | "bedtime" | "cardio" | "strength" | "hiit" | "deep";
-interface Sliders { worn: boolean; steps: number; sleepHours: number; bedtime: number; cardio: number; strength: number; hiit: number; deep: number }
+interface Sliders { worn: boolean; night: boolean; steps: number; sleepHours: number; bedtime: number; cardio: number; strength: number; hiit: number; deep: number }
 
 const PRESETS: Record<string, { label: string; v: Sliders }> = {
-  lazy: { label: "偷懒日", v: { worn: true, steps: 2500, sleepHours: 5.5, bedtime: 90, cardio: 0, strength: 0, hiit: 0, deep: 12 } },
-  normal: { label: "普通日", v: { worn: true, steps: 7000, sleepHours: 7, bedtime: -30, cardio: 0, strength: 0, hiit: 0, deep: 16 } },
-  run: { label: "跑步日", v: { worn: true, steps: 10000, sleepHours: 7.5, bedtime: -30, cardio: 40, strength: 0, hiit: 0, deep: 17 } },
-  lift: { label: "力量日", v: { worn: true, steps: 7000, sleepHours: 7.5, bedtime: -30, cardio: 0, strength: 50, hiit: 0, deep: 17 } },
-  perfect: { label: "完美日", v: { worn: true, steps: 12000, sleepHours: 8, bedtime: -45, cardio: 45, strength: 30, hiit: 20, deep: 19 } },
-  off: { label: "没戴手表", v: { worn: false, steps: 0, sleepHours: 7, bedtime: -30, cardio: 0, strength: 0, hiit: 0, deep: 16 } },
+  lazy: { label: "偷懒日", v: { worn: true, night: true, steps: 2500, sleepHours: 5.5, bedtime: 90, cardio: 0, strength: 0, hiit: 0, deep: 12 } },
+  normal: { label: "普通日", v: { worn: true, night: true, steps: 7000, sleepHours: 7, bedtime: -30, cardio: 0, strength: 0, hiit: 0, deep: 16 } },
+  run: { label: "跑步日", v: { worn: true, night: true, steps: 10000, sleepHours: 7.5, bedtime: -30, cardio: 40, strength: 0, hiit: 0, deep: 17 } },
+  lift: { label: "力量日", v: { worn: true, night: true, steps: 7000, sleepHours: 7.5, bedtime: -30, cardio: 0, strength: 50, hiit: 0, deep: 17 } },
+  perfect: { label: "完美日", v: { worn: true, night: true, steps: 12000, sleepHours: 8, bedtime: -45, cardio: 45, strength: 30, hiit: 20, deep: 19 } },
+  charge: { label: "晚上充电", v: { worn: true, night: false, steps: 7000, sleepHours: 7, bedtime: -30, cardio: 0, strength: 0, hiit: 0, deep: 16 } },
+  off: { label: "一整天没戴", v: { worn: false, night: false, steps: 0, sleepHours: 7, bedtime: -30, cardio: 0, strength: 0, hiit: 0, deep: 16 } },
 };
 
 const PERSONA_NAME: Record<PersonaId, string> = { sedentary: "久坐", walker: "爱走路", runner: "跑步", lifter: "力量", athlete: "全能", improver: "正在改善" };
@@ -108,16 +109,17 @@ function clock(min: number) {
 function toDayInput(v: Sliders): DayInput {
   if (!v.worn) return { worn: false };
   const sleepMinutes = Math.round(v.sleepHours * 60);
+  // Took the watch off at night (most people charge it then): no sleep, bedtime, deep sleep or night HRV.
+  const night = v.night
+    ? { sleepMinutes, bedtimeMinutes: v.bedtime, deepSleepRatio: v.deep / 100, nightHrvMs: Math.round(45 + (v.sleepHours - 7) * 3) }
+    : {};
   return {
     worn: true,
     steps: v.steps,
     standHours: Math.round(8 + v.steps / 2500),
     activeEnergyKcal: Math.round(150 + v.steps * 0.04 + v.cardio * 9 + v.strength * 6 + v.hiit * 11),
     flightsClimbed: Math.round(v.steps / 1500),
-    sleepMinutes,
-    bedtimeMinutes: v.bedtime,
-    deepSleepRatio: v.deep / 100,
-    nightHrvMs: Math.round(45 + (v.sleepHours - 7) * 3),
+    ...night,
     restingHr: 63,
     cardioMinutes: v.cardio,
     distanceKm: Math.round((v.cardio / 6.5) * 10) / 10,
@@ -455,8 +457,8 @@ function watchCardFace(s: GameState, w: { card: MorningCard; step: number }): st
   const dots = `<div class="wc-dots">${[0, 1, 2].map((i) => `<i class="${i === w.step ? "on" : ""}"></i>`).join("")}</div>`;
   let body = "";
   if (w.step === 0) {
-    const label = { good: "睡得好", ok: "还行", short: "有点少", none: "" }[c.night.icon];
-    body = `${canvas(petSpec(s.pet, undefined, undefined, "sleepy"))}<div class="wc-cap">☾ 昨晚 ${c.night.icon === "none" ? "没戴表" : c.night.text}<br><span class="wc-dim">${label}</span></div>`;
+    const label = { good: "睡得好", ok: "还行", short: "有点少", none: "按普通的一晚" }[c.night.icon];
+    body = `${canvas(petSpec(s.pet, undefined, undefined, "sleepy"))}<div class="wc-cap">☾ 昨晚 ${c.night.icon === "none" ? "在充电" : c.night.text}<br><span class="wc-dim">${label}</span></div>`;
   } else if (w.step === 1) {
     body = `${canvas(petSpec(s.pet, undefined, undefined, "happy"))}<div class="wc-cap">${c.headline}</div>`;
   } else {
@@ -500,10 +502,10 @@ function renderMorningCard(s: GameState): string {
   if (!c) return "";
   const animate = phoneCardShown !== c.date;
   phoneCardShown = c.date;
-  const icon = { good: "☀ 睡得好", ok: "☁ 还行", short: "☾ 有点少", none: "· 没戴表" }[c.night.icon];
+  const icon = { good: "☀ 睡得好", ok: "☁ 还行", short: "☾ 有点少", none: "· 按普通的一晚算" }[c.night.icon];
   const stageLabel = s.pet.stage === "adult" ? "已经是成熟体" : `进化 ${pct(c.to)}`;
   return `<div class="card mc ${animate ? "anim" : ""}" data-act="mc-skip">
-    <div class="mc-step"><h3>昨晚</h3><p><b>${c.night.icon === "none" ? "没戴手表睡觉" : c.night.text}</b> <span class="muted">${icon}</span></p></div>
+    <div class="mc-step"><h3>昨晚</h3><p><b>${c.night.icon === "none" ? "手表在充电" : c.night.text}</b> <span class="muted">${icon}</span></p></div>
     <div class="mc-step"><h3>昨天</h3>${c.highlights.map((h) => `<p>${h}</p>`).join("")}</div>
     <div class="mc-step"><h3>成长</h3><p>今天 <b>+${c.gain}</b> <span class="muted">${stageLabel}</span></p>
       <div class="mc-bar" style="--from:${c.from};--to:${c.to}"><i></i></div></div>
@@ -841,7 +843,8 @@ function renderBattle(s: GameState): string {
 function renderDev(s: GameState): string {
   return `<div class="card dev"><h2>假健康数据（${s.today.slice(5)}）</h2>
     <div class="presets">${Object.entries(PRESETS).map(([k, p]) => `<button class="small" data-act="preset" data-v="${k}">${p.label}</button>`).join("")}</div>
-    <label><span>戴着手表</span><input type="checkbox" data-slider="worn" ${sliders.worn ? "checked" : ""}/><span></span></label>
+    <label><span>白天戴着手表</span><input type="checkbox" data-slider="worn" ${sliders.worn ? "checked" : ""}/><span></span></label>
+    <label><span>戴着睡觉</span><input type="checkbox" data-slider="night" ${sliders.night ? "checked" : ""}/><span class="muted" style="font-size:12px">不戴 = 晚上在充电，按普通的一晚算</span></label>
     ${SLIDERS.map((d) => `<label><span>${d.label}</span><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${sliders[d.key]}" data-slider="${d.key}"/><span data-out="${d.key}">${d.fmt(sliders[d.key])}</span></label>`).join("")}
     <div class="row" style="margin-top:6px"><span class="muted" style="font-size:12px">模拟刚完成一次运动：</span><button class="small" data-act="workout" data-v="cardio:30">跑步 30 分钟</button><button class="small" data-act="workout" data-v="strength:40">力量 40 分钟</button><button class="small" data-act="workout" data-v="hiit:20">间歇 20 分钟</button></div>
     <div class="row" style="margin-top:10px"><button class="primary" data-act="live">过完这一天</button><button data-act="ff">按"${PERSONA_NAME[(s.persona ?? "walker") as PersonaId]}"快进 7 天</button></div>
@@ -1282,6 +1285,7 @@ app.addEventListener("input", (ev) => {
   }
   if (!key) return;
   if (key === "worn") sliders.worn = el.checked;
+  else if (key === "night") sliders.night = el.checked;
   else {
     const k = key as SliderKey;
     sliders[k] = Number(el.value);

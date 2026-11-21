@@ -25,7 +25,16 @@ export interface SimUser {
   starter: Starter;
   /** Stable per-person traits. */
   traits: { hrv: number; restingHr: number; bedtime: number; deepRatio: number; stepScale: number };
+  /** Wears the watch to bed. Most people charge it overnight. */
+  nightWearer: boolean;
 }
+
+/**
+ * Share of players who wear the watch to bed. Owner panels found roughly 11–14% (self-selected, older); sleep features
+ * have grown since, so we assume more. Even bed-wearers charge it some nights.
+ */
+export const NIGHT_WEARER_SHARE = 0.3;
+const NIGHTS_WORN = 0.9;
 
 const gauss = (rng: Rng) => {
   const u = Math.max(1e-9, rng());
@@ -49,6 +58,7 @@ export function makeUser(index: number, seed: string): SimUser {
       deepRatio: around(rng, 0.16, 0.03, 0.08),
       stepScale: around(rng, 1, 0.15, 0.6),
     },
+    nightWearer: rng() < NIGHT_WEARER_SHARE,
   };
 }
 
@@ -89,7 +99,7 @@ export function makeDay(user: SimUser, date: string, dayIndex: number, seed: str
   const highHr = Math.round(cardio * 0.4 + hiit * 0.8 + strength * 0.15);
   const sleepMinutes = Math.round(around(rng, sleepMean, sleepSd, 180));
 
-  return {
+  const day: DailyHealth = {
     date,
     worn: true,
     steps,
@@ -108,6 +118,15 @@ export function makeDay(user: SimUser, date: string, dayIndex: number, seed: str
     intervalMinutes: Math.round(hiit * 0.6),
     highHrZoneMinutes: highHr,
   };
+  // Its own random stream, so the rest of the day is the same as before this was added.
+  const offAtNight = !user.nightWearer || createRng(`${seed}:${user.id}:${date}:night`)() >= NIGHTS_WORN;
+  if (offAtNight) {
+    delete day.sleepMinutes;
+    delete day.bedtimeMinutes;
+    delete day.deepSleepRatio;
+    delete day.nightHrvMs;
+  }
+  return day;
 }
 
 export function makeDays(user: SimUser, start: string, count: number, seed: string): DailyHealth[] {

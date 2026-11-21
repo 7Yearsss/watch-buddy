@@ -54,7 +54,7 @@ export function morningCard(s: GameState, progress: number, threshold: number): 
   const sleep = day.worn ? day.sleepMinutes : undefined;
   const night: MorningCard["night"] =
     sleep === undefined
-      ? { icon: "none", text: "昨晚没戴手表睡觉" }
+      ? { icon: "none", text: "昨晚手表在充电，按普通的一晚算" }
       : { icon: sleep >= 420 ? "good" : sleep >= 360 ? "ok" : "short", text: hm(sleep) };
 
   const ranked = (Object.entries(result.echoes) as [EchoType, number][])

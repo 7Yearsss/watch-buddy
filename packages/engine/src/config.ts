@@ -28,7 +28,8 @@ export interface EngineConfig {
   caps: Partial<Record<keyof import("./types").DailyHealth, number>>;
   echoWeights: Record<EchoType, Partial<Record<ScoreKey, number>>>;
   /** The daily bonus averages the best few echoes, so one noisy metric can't max it out. */
-  growth: { base: number; bonus: number; statBase: number; statBonus: number; topEchoes: number };
+  /** `ordinaryNightEcho`: the water echo a night counts as when there is no sleep data, and the floor for a poor tracked night. */
+  growth: { base: number; bonus: number; statBase: number; statBonus: number; topEchoes: number; ordinaryNightEcho: number };
   condition: { max: number; days: number };
   statSources: Record<Stat, EchoType[]>;
   /** Absolute lifestyle references used for evolution branches and wild encounters. */
@@ -59,6 +60,8 @@ export interface EngineConfig {
     typeWeight: { base: number; affinity: number; echo: number };
     /** Dragon weight when the dragon lifestyle is not met: rare, but never impossible, so everyone can finish the dex. */
     dragonBaseWeight: number;
+    /** Water and shadow wilds weigh in at least this affinity, so people who take the watch off at night can still find them. */
+    sleepTypeAffinityFloor: number;
     shinyOdds: number;
   };
   opponents: {
@@ -151,7 +154,7 @@ export const defaultConfig: EngineConfig = {
     electric: { highHrZoneMinutes: 0.7, intervalMinutes: 0.3 },
     ground: { activeDays: 0.6, flightsClimbed: 0.4 },
   },
-  growth: { base: 10, bonus: 10, statBase: 2, statBonus: 2, topEchoes: 3 },
+  growth: { base: 10, bonus: 10, statBase: 2, statBonus: 2, topEchoes: 3, ordinaryNightEcho: 0.5 },
   condition: { max: 0.25, days: 3 },
   statSources: {
     hp: ["grass"],
@@ -185,6 +188,7 @@ export const defaultConfig: EngineConfig = {
     weeklyRareBoost: 1,
     typeWeight: { base: 1, affinity: 4, echo: 2 },
     dragonBaseWeight: 1,
+    sleepTypeAffinityFloor: 0.6,
     shinyOdds: 64,
   },
   opponents: {

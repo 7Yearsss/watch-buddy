@@ -27,11 +27,23 @@ function simulate(days: DailyHealth[], fromIndex: number, pet: PetState, stopWhe
 }
 
 describe("growth", () => {
-  it("earns the base for just wearing the watch and at most double", () => {
-    expect(dayGrowth({}, cfg).gain).toBe(10);
-    expect(dayGrowth({ grass: 0, water: -1 }, cfg).gain).toBe(10);
-    expect(dayGrowth({ grass: 1, flying: 0.5 }, cfg).gain).toBe(15);
+  it("earns the base plus an ordinary night for having data, and at most double", () => {
+    const ordinary = cfg.growth.base + (cfg.growth.bonus * cfg.growth.ordinaryNightEcho) / cfg.growth.topEchoes;
+    expect(dayGrowth({}, cfg).gain).toBeCloseTo(ordinary);
+    expect(dayGrowth({ grass: 1, flying: 0.5 }, cfg).gain).toBeCloseTo(cfg.growth.base + (cfg.growth.bonus * 2) / 3);
     expect(dayGrowth({ grass: 1, flying: 1, water: 1, fire: 0.2 }, cfg).gain).toBe(20);
+  });
+
+  it("treats a night without sleep data as an ordinary night, and wearing the watch to bed never hurts", () => {
+    const day = { grass: 0.4, flying: 0.6 };
+    const offAtNight = dayGrowth(day, cfg);
+    const poorNight = dayGrowth({ ...day, water: -1 }, cfg);
+    const goodNight = dayGrowth({ ...day, water: 1 }, cfg);
+    expect(poorNight.gain).toBeCloseTo(offAtNight.gain);
+    expect(poorNight.quality).toBeCloseTo(offAtNight.quality);
+    expect(poorNight.statGains.recovery).toBeCloseTo(offAtNight.statGains.recovery);
+    expect(goodNight.gain).toBeGreaterThan(offAtNight.gain);
+    expect(goodNight.quality).toBeGreaterThan(offAtNight.quality);
   });
 
   it("never drops condition below 1", () => {

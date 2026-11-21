@@ -121,6 +121,9 @@ export function weeklyLetter(x: LetterInput): string {
     return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
   };
   const sleep = Math.round(avg("sleepMinutes"));
+  // Most people charge the watch at night; with only a night or two of sleep data, say nothing about sleep rather than guess.
+  const knowsSleep = worn.filter((d) => typeof d.sleepMinutes === "number").length >= 3;
+  const shortSleep = knowsSleep && sleep < 420;
   const steps = Math.round(avg("steps") / 100) * 100;
   const workouts = worn.filter((d) => (d.cardioMinutes ?? 0) + (d.strengthMinutes ?? 0) + (d.highIntensityMinutes ?? 0) >= 20);
   const best = [...worn].sort(
@@ -130,7 +133,7 @@ export function weeklyLetter(x: LetterInput): string {
 
   const lines: string[] = [OPENING[x.personality], ""];
   lines.push(
-    `这一周你平均每晚睡了 ${Math.floor(sleep / 60)} 小时 ${sleep % 60} 分，每天走了 ${steps.toLocaleString()} 步，运动了 ${workouts.length} 次。我一共长了 ${Math.round(x.growth)} 点成长值${x.captures.length ? `，还收服了 ${x.captures.join("、")}` : ""}。`,
+    `这一周${knowsSleep ? `你平均每晚睡了 ${Math.floor(sleep / 60)} 小时 ${sleep % 60} 分，` : "你"}每天走了 ${steps.toLocaleString()} 步，运动了 ${workouts.length} 次。我一共长了 ${Math.round(x.growth)} 点成长值${x.captures.length ? `，还收服了 ${x.captures.join("、")}` : ""}。`,
   );
 
   const typeName = TYPE_NAME[x.bossType];
@@ -141,12 +144,12 @@ export function weeklyLetter(x: LetterInput): string {
     lines.push(`周末的${typeName}系 Boss……我赢了！${why}`);
   } else {
     if (x.bossAdvantage === "bossAdvantage") why = `它克制我的属性${x.counterHint ? `，下次带上${x.counterHint}试试` : "，要是能学会克制它的技能就好了"}。`;
-    else if (sleep < 420) why = "这周睡得少了一点，我有点没力气。";
+    else if (shortSleep) why = "这周睡得少了一点，我有点没力气。";
     else why = "它真的很强，我们下周再来。";
     lines.push(`周末的${typeName}系 Boss 没打过……${why}`);
   }
 
-  lines.push(`下周是${TYPE_NAME[x.nextBossType]}系 Boss。${sleep < 420 ? "想赢的话，这周多睡一点吧。" : workouts.length < 2 ? "想赢的话，这周多动一动吧。" : "保持这个状态就好！"}`);
+  lines.push(`下周是${TYPE_NAME[x.nextBossType]}系 Boss。${shortSleep ? "想赢的话，这周多睡一点吧。" : workouts.length < 2 ? "想赢的话，这周多动一动吧。" : "保持这个状态就好！"}`);
   lines.push("", CLOSING[x.personality]);
   return lines.join("\n");
 }

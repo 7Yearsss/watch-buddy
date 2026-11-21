@@ -85,10 +85,14 @@ function discovery(history: DailyHealth[]): { text: string; short: string } | nu
   const thisWeek = worn(history.slice(-7));
   const lastWeek = worn(history.slice(-14, -7));
   if (thisWeek.length < 3 || lastWeek.length < 3) return null;
-  const pick = (f: (d: DailyHealth & { worn: true }) => number | undefined) => [
-    avg(thisWeek.map((d) => f(d as DailyHealth & { worn: true }) ?? 0)),
-    avg(lastWeek.map((d) => f(d as DailyHealth & { worn: true }) ?? 0)),
-  ];
+  // Average only the days that have the metric: a night the watch was charging is not a night of zero sleep.
+  const known = (days: DailyHealth[], f: (d: DailyHealth) => number | undefined) =>
+    days.map(f).filter((v): v is number => typeof v === "number");
+  const pick = (f: (d: DailyHealth) => number | undefined) => {
+    const now = known(thisWeek, f);
+    const then = known(lastWeek, f);
+    return now.length >= 3 && then.length >= 3 ? [avg(now), avg(then)] : [0, 0];
+  };
   const cands: { score: number; text: string; short: string }[] = [];
   const [bedNow, bedThen] = pick((d) => d.bedtimeMinutes);
   if (bedThen! - bedNow! >= 10) cands.push({ score: (bedThen! - bedNow!) / 30, text: `你这周平均入睡比上周早了 ${Math.round(bedThen! - bedNow!)} 分钟！`, short: `这周早睡了 ${Math.round(bedThen! - bedNow!)} 分钟！` });
@@ -125,8 +129,10 @@ export function pickSurprise(x: SurpriseInput): Surprise {
   const recentKinds = new Set(x.recent.filter((r) => r.date > addDaysStr(x.date, -3)).map((r) => r.kind));
   const disc = discovery(x.history);
   const nextMove = MOVES.find((m) => !x.moves.includes(m));
+  // It only dreams on nights it slept on your wrist: a small reward for wearing the watch to bed, never a requirement.
+  const sleptWithYou = typeof x.history[x.history.length - 1]?.sleepMinutes === "number";
   const all: { kind: SurpriseKind; w: number }[] = [
-    { kind: "dream", w: top ? 3 : 2 },
+    { kind: "dream", w: sleptWithYou ? (top ? 3 : 2) : 0 },
     { kind: "item", w: 3 },
     { kind: "footprint", w: x.uncapturedTypes.length ? 2 : 0 },
     { kind: "discovery", w: disc ? 3 : 0 },

@@ -58,6 +58,27 @@ for (const o of outcomes) if (o.adultVariant) variants.set(o.adultVariant, (vari
 w(`Adult forms: ${[...variants.entries()].map(([k, v]) => `${k} ${share(v, outcomes.filter((o) => o.adultVariant).length)}`).join(", ")}`);
 w();
 
+w(`### Wears the watch to bed or not`);
+w();
+w(`A night without sleep data counts as an ordinary night (decision 74).`);
+w();
+w(`| Group | Users | 1st evo median | 2nd evo median | Reached adult | Avg daily growth | Boss win rate | Water + shadow captured (avg) |`);
+w(`|---|---|---|---|---|---|---|---|`);
+for (const [label, night] of [["Wears to bed", true], ["Charges overnight", false]] as const) {
+  const os = outcomes.filter((o) => o.user.nightWearer === night);
+  const juv = os.map((o) => o.juvenileDay).filter((d): d is number => d !== null);
+  const adult = os.map((o) => o.adultDay).filter((d): d is number => d !== null);
+  const bosses = os.flatMap((o) => o.bosses);
+  const sleepTypes = os.reduce(
+    (s, o) => s + [...o.captures.keys()].filter((id) => ["water", "shadow"].includes(WILD_ROSTER.find((x) => x.id === id)?.type ?? "")).length,
+    0,
+  );
+  w(
+    `| ${label} | ${os.length} | ${fmt(pct(juv, 50))} | ${fmt(pct(adult, 50))} | ${share(adult.length, os.length)} | ${fmt(os.reduce((s, o) => s + o.avgDailyGain, 0) / Math.max(1, os.length))} | ${share(bosses.filter((b) => b.won).length, bosses.length)} | ${fmt(sleepTypes / Math.max(1, os.length))} |`,
+  );
+}
+w();
+
 w(`## Rarity`);
 w();
 w(`| Rarity | At hatch | At end |`);

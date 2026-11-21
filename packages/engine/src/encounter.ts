@@ -90,7 +90,9 @@ export function rollEncounter(input: EncounterInput, cfg: EngineConfig, roster =
       ? input.dragonEligible
         ? e.typeWeight.base + e.typeWeight.affinity
         : e.dragonBaseWeight
-      : e.typeWeight.base + e.typeWeight.affinity * input.affinity[t] + e.typeWeight.echo * Math.max(0, input.echoes[t] ?? 0);
+      : e.typeWeight.base +
+        e.typeWeight.affinity * (t === "water" || t === "shadow" ? Math.max(input.affinity[t], e.sleepTypeAffinityFloor) : input.affinity[t]) +
+        e.typeWeight.echo * Math.max(0, input.echoes[t] ?? 0);
   const species = weighted(rng, pool.filter((s) => s.rarity === rarity), (s) => typeWeight(s.type));
   if (!species) return null;
 

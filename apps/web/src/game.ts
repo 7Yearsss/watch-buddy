@@ -14,6 +14,8 @@ function simUser(state: Pick<GameState, "userId" | "persona">, starter: Starter)
     persona: PERSONAS.find((p) => p.id === state.persona) ?? PERSONAS[0]!,
     starter,
     traits: { hrv: 45, restingHr: 63, bedtime: -20, deepRatio: 0.16, stepScale: 1 },
+    // Fast-forward keeps sleep data; the "戴着睡觉" switch in the side panel tries a night off the wrist.
+    nightWearer: true,
   };
 }
 
