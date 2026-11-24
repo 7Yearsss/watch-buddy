@@ -1,0 +1,94 @@
+---
+/**
+ * Stand-in pet art (simple vector placeholders) until the illustrator's finals land (docs/design/09).
+ * Same shape language as the game: round body, dark same-hue outline, one hard-edged shadow, big eyes.
+ */
+type Kind = "egg" | "water" | "fire" | "grass" | "flying" | "fighting" | "ground" | "dragon";
+interface Props { kind: Kind; mood?: "happy" | "sleep" | "idle"; class?: string; label?: string }
+const { kind, mood = "idle", class: cls = "", label } = Astro.props;
+
+const PAL: Record<Kind, { main: string; shade: string; line: string; belly: string; extra: string }> = {
+  egg: { main: "#F6F1E7", shade: "#E3D9C6", line: "#6B5C45", belly: "#F6F1E7", extra: "#7FB6F0" },
+  water: { main: "#4E9BEA", shade: "#2F74C4", line: "#173F78", belly: "#D6ECFF", extra: "#FFFFFF" },
+  fire: { main: "#F47A45", shade: "#D85A2A", line: "#7A2810", belly: "#FFE0C2", extra: "#FFC94A" },
+  grass: { main: "#67BA55", shade: "#4C9B3E", line: "#24602C", belly: "#E4F5CF", extra: "#A7E07A" },
+  flying: { main: "#8DB8F2", shade: "#6493D6", line: "#22406E", belly: "#EEF5FF", extra: "#FFFFFF" },
+  fighting: { main: "#E2585E", shade: "#B83C43", line: "#5C1519", belly: "#FCE3E0", extra: "#F7D9A8" },
+  ground: { main: "#C29358", shade: "#9C703A", line: "#4A3116", belly: "#F3E4C6", extra: "#8A7A6A" },
+  dragon: { main: "#3FAE9A", shade: "#2A8676", line: "#0F3A33", belly: "#E0F5DA", extra: "#F2C94C" },
+};
+const p = PAL[kind];
+const id = `pet-${kind}-${mood}-${Math.random().toString(36).slice(2, 7)}`;
+const drop = "M60 10 C72 28 100 52 100 78 C100 100 82 112 60 112 C38 112 20 100 20 78 C20 52 48 28 60 10 Z";
+const round = "M60 30 C86 30 102 52 102 78 C102 100 84 112 60 112 C36 112 18 100 18 78 C18 52 34 30 60 30 Z";
+const eggPath = "M60 12 C84 12 100 50 100 76 C100 100 82 114 60 114 C38 114 20 100 20 76 C20 50 36 12 60 12 Z";
+const body = kind === "egg" ? eggPath : kind === "water" ? drop : round;
+const name = label ?? { egg: "一颗蛋", water: "水系初始精灵", fire: "火系初始精灵", grass: "草系初始精灵", flying: "飞行形态", fighting: "战斗形态", ground: "地面形态", dragon: "龙形态" }[kind];
+---
+<svg class={`pet ${cls}`} viewBox="0 0 120 120" role="img" aria-label={`${name}（示意图）`}>
+  <defs><clipPath id={id}><path d={body} /></clipPath></defs>
+
+  {kind === "flying" && (
+    <g class="pet-wings" stroke={p.line} stroke-width="4" stroke-linejoin="round" fill={p.extra}>
+      <path d="M22 70 C4 58 2 40 10 30 C16 44 26 50 34 54 Z" />
+      <path d="M98 70 C116 58 118 40 110 30 C104 44 94 50 86 54 Z" />
+    </g>
+  )}
+  {kind === "dragon" && (
+    <path d="M96 96 C110 98 116 88 114 78 C108 86 102 88 94 86 Z" fill={p.main} stroke={p.line} stroke-width="4" stroke-linejoin="round" />
+  )}
+
+  <path d={body} fill={p.shade} />
+  <g clip-path={`url(#${id})`}>
+    <circle cx="50" cy="66" r="54" fill={p.main} />
+    {kind === "egg"
+      ? <g fill={p.extra}><circle cx="44" cy="54" r="7" /><circle cx="74" cy="80" r="9" /><circle cx="52" cy="96" r="5" /></g>
+      : <ellipse cx="60" cy="96" rx="26" ry="16" fill={p.belly} />}
+  </g>
+  <path d={body} fill="none" stroke={p.line} stroke-width="4" stroke-linejoin="round" />
+
+  {kind === "fire" && <path d="M60 34 C48 28 46 14 56 4 C56 14 66 14 70 22 C74 16 80 16 82 18 C80 30 72 36 60 34 Z" fill={p.extra} stroke={p.line} stroke-width="4" stroke-linejoin="round" />}
+  {kind === "grass" && (
+    <g fill={p.extra} stroke={p.line} stroke-width="4" stroke-linejoin="round">
+      <path d="M58 33 C50 19 36 15 28 19 C34 31 46 35 58 33 Z" />
+      <path d="M62 33 C66 17 80 9 92 13 C88 27 76 35 62 33 Z" />
+    </g>
+  )}
+  {kind === "ground" && (
+    <g fill={p.extra} stroke={p.line} stroke-width="4" stroke-linejoin="round">
+      <path d="M40 38 L46 20 L54 34 Z" /><path d="M54 33 L62 12 L70 33 Z" /><path d="M68 34 L76 20 L82 40 Z" />
+    </g>
+  )}
+  {kind === "dragon" && (
+    <g fill={p.extra} stroke={p.line} stroke-width="4" stroke-linejoin="round">
+      <path d="M44 36 C40 24 42 16 48 12 C50 22 54 28 54 32 Z" /><path d="M76 36 C80 24 78 16 72 12 C70 22 66 28 66 32 Z" />
+    </g>
+  )}
+  {kind === "fighting" && (
+    <g fill={p.extra} stroke={p.line} stroke-width="4" stroke-linejoin="round">
+      <circle cx="16" cy="86" r="11" /><circle cx="104" cy="86" r="11" />
+    </g>
+  )}
+
+  {kind !== "egg" && (
+    <g class="pet-face">
+      {mood === "sleep" ? (
+        <g stroke="#172033" stroke-width="3.5" stroke-linecap="round" fill="none">
+          <path d="M41 76 Q47 80 53 76" /><path d="M67 76 Q73 80 79 76" />
+        </g>
+      ) : mood === "happy" ? (
+        <g stroke="#172033" stroke-width="3.5" stroke-linecap="round" fill="none">
+          <path d="M41 78 Q47 70 53 78" /><path d="M67 78 Q73 70 79 78" />
+        </g>
+      ) : (
+        <g class="pet-eyes">
+          <ellipse cx="47" cy="75" rx="5.5" ry="7" fill="#172033" /><ellipse cx="73" cy="75" rx="5.5" ry="7" fill="#172033" />
+          <circle cx="49" cy="72" r="2" fill="#fff" /><circle cx="75" cy="72" r="2" fill="#fff" />
+        </g>
+      )}
+      <ellipse cx="37" cy="88" rx="6" ry="3.5" fill="#FF8FA8" opacity=".75" />
+      <ellipse cx="83" cy="88" rx="6" ry="3.5" fill="#FF8FA8" opacity=".75" />
+      <path d={mood === "happy" ? "M53 87 Q60 96 67 87" : "M55 88 Q60 92 65 88"} stroke="#172033" stroke-width="3" stroke-linecap="round" fill={mood === "happy" ? "#B8323F" : "none"} />
+    </g>
+  )}
+</svg>

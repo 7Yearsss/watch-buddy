@@ -1,0 +1,343 @@
+---
+import "../styles/site.css";
+import Pet from "../components/Pet.astro";
+import Watch from "../components/Watch.astro";
+import Icon from "../components/Icon.astro";
+
+const day = [
+  { time: "07:12", title: "早上，开奖", text: "抬腕就是一张小卡片：昨晚睡得怎样、昨天最突出的一件事、它长了多少。三屏，三秒。" },
+  { time: "12:30", title: "白天，它陪着你", text: "它在表盘上待着，会犯困、会无聊、会想出去走走。你不用照顾它，照常过日子就好。" },
+  { time: "19:05", title: "运动完，它欢呼", text: "运动记录一存进健康数据，它就知道。今晚它出门探险，去哪儿看你做了什么运动。" },
+  { time: "23:40", title: "睡前，它先困了", text: "它跟着你平时的作息，到点自己关灯。熬夜不扣任何东西，它只会小声说一句早点睡。" },
+  { time: "次日 07:05", title: "第二天，它回来了", text: "带回一张明信片和一件那个地方才有的小东西。白天它一直在表上，从不「不在家」。" },
+];
+
+const forms = [
+  { kind: "flying", life: "常跑步、骑车", name: "飞行形态", look: "长出翅膀" },
+  { kind: "fighting", life: "常练力量", name: "战斗形态", look: "长出拳头" },
+  { kind: "ground", life: "每天都动、常爬楼", name: "地面形态", look: "背上长出岩刺" },
+  { kind: "dragon", life: "样样都强", name: "龙形态", look: "长出角和尾巴，最难养成" },
+] as const;
+
+const play = [
+  { icon: "sun", title: "每天早上开奖", text: "多数早上有一件小惊喜：梦境日记、捡到的小东西、明天的天气。" },
+  { icon: "book", title: "野怪图鉴", text: "不同的生活习惯会引来不同属性的野怪。打赢它，收进图鉴。" },
+  { icon: "swords", title: "每周 Boss", text: "每周一次，按你最近的状态开打。输了不掉任何东西。" },
+  { icon: "users", title: "好友切磋", text: "打的是好友宠物的快照，对方不用在线。也可以一起打 Boss。" },
+  { icon: "watch", title: "表盘小组件", text: "进化进度、Boss 倒计时，抬腕一眼就看到。" },
+  { icon: "mail", title: "每周来信", text: "它用自己的口吻，跟你聊这一周。" },
+];
+
+const promises = [
+  { title: "它不会死", text: "最多犯困、闹点小脾气。换手机、换手表，它都跟着你。" },
+  { title: "只跟你自己比", text: "看的是你比平时多了多少，不排名，不和别人比步数。" },
+  { title: "只加不减", text: "偷懒一天、没戴手表，什么都不扣。没做到的心愿也没关系。" },
+  { title: "不催你", text: "每天最多一条通知，不提连胜，不让你有负罪感。" },
+];
+
+const faq = [
+  { q: "需要什么设备？", a: "iPhone 和 Apple Watch。宠物住在手表上，图鉴、对战和好友在 iPhone 上。" },
+  { q: "晚上要给手表充电怎么办？", a: "没戴表睡觉的那晚按「普通的一晚」算，不吃亏。戴着睡的话，第二天早上会多一篇它的梦境日记。" },
+  { q: "收费吗？", a: "养成、进化、野怪、Boss、好友都免费。Pulseling Plus 会员是让它用 AI 跟你说话、写信，以及更多外观。" },
+  { q: "支持安卓吗？", a: "目前只做 iPhone 和 Apple Watch。" },
+  { q: "什么时候上线？", a: "[上线时间]。留下邮箱，上线那天我们只给你发这一封邮件。" },
+];
+---
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Pulseling · 跟着你的健康长大</title>
+  <meta name="description" content="住在 Apple Watch 上的小伙伴。它读你的步数、睡眠和运动，你怎么生活，它就怎么长大。" />
+  <meta name="theme-color" content="#0B0F1F" />
+</head>
+<body>
+  <a class="skip" href="#main">跳到正文</a>
+
+  <header class="nav" data-nav>
+    <a class="brand" href="#top" aria-label="Pulseling 首页">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6" /></svg>
+      Pulseling
+    </a>
+    <a class="btn btn-small" href="#join">加入候补名单</a>
+  </header>
+
+  <main id="main">
+    <!-- 1. Opening film: health signals flow into the watch, the egg hatches, then the promise. -->
+    <section class="film" id="top" data-scene aria-label="开场">
+      <div class="stage">
+        <div class="film-intro" data-scrub="out:0.02,0.12">
+          <p class="eyebrow">Pulseling · Apple Watch</p>
+          <h1>你的手表里，<br />住进一只小伙伴</h1>
+        </div>
+
+        <div class="film-center" data-scrub="out:0.02,0.12;lift:0.72,0.88">
+          <div class="orbit" aria-hidden="true">
+            <div class="sig" style="--x:-1;--y:-1" data-scrub="in:0.10,0.16;fly:0.22,0.30">
+              <Icon name="steps" /><span><b>8,412</b> 步</span>
+            </div>
+            <div class="sig" style="--x:1;--y:-1" data-scrub="in:0.18,0.24;fly:0.32,0.40">
+              <Icon name="moon" /><span>睡了 <b>7 时 20 分</b></span>
+            </div>
+            <div class="sig" style="--x:-1;--y:1" data-scrub="in:0.26,0.32;fly:0.42,0.50">
+              <Icon name="run" /><span>跑步 <b>40 分钟</b></span>
+            </div>
+            <div class="sig" style="--x:1;--y:1" data-scrub="in:0.34,0.40;fly:0.50,0.58">
+              <Icon name="heart" /><span>恢复 <b>比平时好</b></span>
+            </div>
+          </div>
+
+          <Watch class="film-watch" time="07:12">
+            <div class="ring" data-scrub="ring:0.20,0.60" aria-hidden="true"></div>
+            <div class="film-egg" data-scrub="hatch:0.60,0.66"><Pet kind="egg" /></div>
+            <div class="film-flash" data-scrub="fi:0.58,0.61;fo:0.61,0.70" aria-hidden="true"></div>
+            <div class="film-pet" data-scrub="hatch:0.62,0.70"><Pet kind="water" mood="happy" /></div>
+            <div class="film-bubble" data-scrub="bub:0.68,0.74">你好呀！</div>
+          </Watch>
+        </div>
+
+        <div class="film-outro" data-scrub="outro:0.76,0.88;cta:0.84,0.94">
+          <h2 class="display">你怎么生活，<br />它就怎么长大</h2>
+          <p class="lede">它读你的步数、睡眠和运动，每天早上长大一点。<br class="br-wide" />常跑步的长出翅膀，常练力量的长出拳头。</p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#join">加入候补名单</a>
+            <a class="btn btn-ghost" href="#day">看看它的一天</a>
+          </div>
+          <ul class="facts">
+            <li>核心玩法免费</li><li>不用买新设备</li><li>健康数据留在你手机上</li>
+          </ul>
+        </div>
+
+        <p class="scroll-hint" data-scrub="out:0.01,0.06" aria-hidden="true">往下滑</p>
+      </div>
+    </section>
+
+    <!-- 2. A day on the wrist: scrolling moves through the day; the watch shows that moment. -->
+    <section class="day" id="day" data-scene data-steps={day.length} aria-labelledby="day-title">
+      <div class="stage">
+        <div class="day-copy">
+          <p class="eyebrow">它的一天</p>
+          <h2 id="day-title" class="h2">你照常过日子，<br />它在手腕上过它的</h2>
+          <ol class="day-times">
+            {day.map((d, i) => <li data-i={i}><span>{d.time}</span></li>)}
+          </ol>
+          <div class="day-texts">
+            {day.map((d, i) => (
+              <div class="day-text" data-i={i}>
+                <h3>{d.title}</h3>
+                <p>{d.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Watch class="day-watch" time="--:--" timeSlot>
+          <div class="scr" data-i="0">
+            <div class="mini-ring"><Pet kind="water" mood="happy" /></div>
+            <p class="scr-cap">昨晚 7 时 20 分 · 睡得好</p>
+            <p class="scr-big">成长 +14</p>
+          </div>
+          <div class="scr" data-i="1">
+            <div class="bubble">今天走了 6,214 步！</div>
+            <Pet kind="water" />
+          </div>
+          <div class="scr" data-i="2">
+            <div class="bubble">跑步 40 分钟！辛苦啦</div>
+            <Pet kind="water" mood="happy" class="hop" />
+            <p class="scr-cap">今晚我去风之丘探险</p>
+          </div>
+          <div class="scr scr-night" data-i="3">
+            <div class="bubble dim">zzz…</div>
+            <Pet kind="water" mood="sleep" />
+          </div>
+          <div class="scr" data-i="4">
+            <div class="postcard">
+              <svg viewBox="0 0 120 56" aria-hidden="true"><path d="M0 44 C20 30 34 34 50 26 C66 18 82 26 120 14 L120 56 L0 56 Z" fill="#7FB389" /><circle cx="94" cy="14" r="7" fill="#FFD98A" /></svg>
+              <span>风之丘</span>
+            </div>
+            <p class="scr-cap">带回了：一片蓝羽毛</p>
+          </div>
+        </Watch>
+      </div>
+    </section>
+
+    <!-- 3. Try it: the pet reacts right here. -->
+    <section class="try" aria-labelledby="try-title">
+      <div class="wrap try-grid">
+        <div data-reveal>
+          <p class="eyebrow">试试看</p>
+          <h2 id="try-title" class="h2">点一下它</h2>
+          <p class="lede">抬腕的时候点点它，它会开心、会说话，有时还会给你表演刚学会的动作。</p>
+        </div>
+        <div class="try-watch" data-reveal>
+          <Watch time="12:30">
+            <button class="try-pet" type="button" data-try aria-label="摸摸它">
+              <span class="try-bubble" data-try-line aria-live="polite">点我呀</span>
+              <span class="try-body"><Pet kind="water" class="face-idle" /><Pet kind="water" mood="happy" class="face-happy" /></span>
+              <span class="try-heart" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" /></svg>
+              </span>
+            </button>
+          </Watch>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Same egg, different lives. -->
+    <section class="mirror" aria-labelledby="mirror-title">
+      <div class="wrap">
+        <div class="center" data-reveal>
+          <p class="eyebrow">它是你生活的镜子</p>
+          <h2 id="mirror-title" class="h2">同一颗蛋，<br />不同的生活，不同的它</h2>
+          <p class="lede">不用选，不用加点。你最近两周怎么过，它进化时就长成什么样。</p>
+        </div>
+        <div class="mirror-egg" data-reveal><Pet kind="egg" /></div>
+        <ul class="forms">
+          {forms.map((f, i) => (
+            <li class="form" data-reveal style={`--d:${i * 80}ms`}>
+              <span class="form-life">{f.life}</span>
+              <Pet kind={f.kind} />
+              <b>{f.name}</b>
+              <span class="muted">{f.look}</span>
+            </li>
+          ))}
+        </ul>
+        <div class="titles" data-reveal>
+          <p class="muted">还会给你一个称号，只说好话：</p>
+          <ul><li>夜行的追风者</li><li>早起的举铁者</li><li>规律的漫步者</li><li>双修的安眠者</li><li>新晋旅人</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. What there is to do. -->
+    <section class="play" aria-labelledby="play-title">
+      <div class="wrap">
+        <div data-reveal>
+          <p class="eyebrow">每天都有点事</p>
+          <h2 id="play-title" class="h2">不只是看着它长大</h2>
+        </div>
+        <ul class="cards">
+          {play.map((c, i) => (
+            <li class="card" data-reveal style={`--d:${(i % 3) * 70}ms`}>
+              <Icon name={c.icon} />
+              <h3>{c.title}</h3>
+              <p>{c.text}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 6. No pressure. -->
+    <section class="promise" aria-labelledby="promise-title">
+      <div class="wrap">
+        <div data-reveal>
+          <p class="eyebrow">没有压力</p>
+          <h2 id="promise-title" class="h2">它陪着你，<br />不盯着你</h2>
+        </div>
+        <ul class="promises">
+          {promises.map((p, i) => (
+            <li data-reveal style={`--d:${i * 70}ms`}><h3>{p.title}</h3><p>{p.text}</p></li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 7. Privacy. -->
+    <section class="privacy" aria-labelledby="privacy-title">
+      <div class="wrap privacy-grid">
+        <div data-reveal>
+          <p class="eyebrow">你的健康数据</p>
+          <h2 id="privacy-title" class="h2">留在你的手机上</h2>
+          <p class="lede">心率明细、睡眠的每个阶段，都在 iPhone 上算完。我们只收到算好的结果。</p>
+        </div>
+        <div class="privacy-big" data-reveal>
+          <span class="num">1</span>
+          <span>行<br /><small>每天上传的全部内容：<br />一行当天的汇总</small></span>
+        </div>
+        <ul class="checks" data-reveal>
+          <li><Icon name="check" />只读取，不往「健康」里写任何东西</li>
+          <li><Icon name="check" />不上传位置，运动记录不含 GPS 路线</li>
+          <li><Icon name="check" />不卖数据，不放广告</li>
+          <li><Icon name="check" />App 里能看到上传的每一项，随时删除全部数据</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 8. Price. -->
+    <section class="price" aria-labelledby="price-title">
+      <div class="wrap">
+        <div class="center" data-reveal>
+          <p class="eyebrow">价格</p>
+          <h2 id="price-title" class="h2">养成免费，<br />想让它开口说话再升级</h2>
+        </div>
+        <div class="plans">
+          <div class="plan" data-reveal>
+            <h3>免费</h3>
+            <p class="plan-price">¥0</p>
+            <ul>
+              <li>孵化、每天成长、早晨卡片</li>
+              <li>全部进化形态、稀有度、闪光</li>
+              <li>野怪图鉴、每周 Boss、好友</li>
+              <li>手表 App、表盘小组件</li>
+              <li>每周周报卡片</li>
+            </ul>
+          </div>
+          <div class="plan plan-plus" data-reveal style="--d:80ms">
+            <h3>Pulseling Plus</h3>
+            <p class="plan-price">[月费] <small>/ 月</small></p>
+            <p class="muted">或 [年费] / 年 · 7 天免费试用</p>
+            <ul>
+              <li>它用 AI 跟你说话，每天聊 3 句，记得你说过的事</li>
+              <li>每周一封它写给你的信</li>
+              <li>全部历史数据、月报和年报</li>
+              <li>每月一件会员外观和表盘主题</li>
+            </ul>
+          </div>
+        </div>
+        <p class="center muted small" data-reveal>钱不买战斗力：会员在对战里只多一段解说。</p>
+      </div>
+    </section>
+
+    <!-- 9. FAQ. -->
+    <section class="faq" aria-labelledby="faq-title">
+      <div class="wrap narrow">
+        <h2 id="faq-title" class="h2" data-reveal>常见问题</h2>
+        {faq.map((f) => (
+          <details data-reveal>
+            <summary>{f.q}<Icon name="plus" /></summary>
+            <p>{f.a}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+
+    <!-- 10. Waitlist. -->
+    <section class="join" id="join" aria-labelledby="join-title">
+      <div class="wrap narrow center" data-reveal>
+        <div class="join-pets" aria-hidden="true"><Pet kind="grass" /><Pet kind="water" mood="happy" /><Pet kind="fire" /></div>
+        <h2 id="join-title" class="h2">上线那天，第一个见到它</h2>
+        <p class="lede">留个邮箱。上线时只发这一封，不发别的。</p>
+        <form class="join-form" data-join novalidate>
+          <label class="sr" for="email">邮箱</label>
+          <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="你的邮箱" required />
+          <button class="btn btn-primary" type="submit">加入候补名单</button>
+        </form>
+        <p class="join-msg" data-join-msg role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <span>© 2026 Pulseling · 跟着你的健康长大</span>
+      <span class="muted">联系我们：[联系邮箱]</span>
+    </div>
+  </footer>
+
+  <script>
+    import "../scripts/site.ts";
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+---
+/** A plain Apple Watch-shaped frame drawn in CSS (no Apple artwork). Children go on the screen. */
+interface Props { time?: string; class?: string; timeSlot?: boolean }
+const { time = "09:41", class: cls = "", timeSlot = false } = Astro.props;
+---
+<div class={`watch ${cls}`}>
+  <span class="watch-crown" aria-hidden="true"></span>
+  <span class="watch-side" aria-hidden="true"></span>
+  <div class="watch-screen">
+    <span class="watch-time" data-watch-time={timeSlot ? "" : undefined} aria-hidden="true">{time}</span>
+    <slot />
+  </div>
+</div>
