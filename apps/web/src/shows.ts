@@ -188,7 +188,11 @@ function play(show: Show, done: () => void) {
     finished = true;
     cancelAnimationFrame(raf);
     markSeen(show.kind);
-    bg.remove();
+    // fade out over the app instead of cutting; the next queued show starts as this one leaves
+    bg.classList.add("leaving");
+    const gone = () => bg.remove();
+    bg.addEventListener("animationend", gone, { once: true });
+    setTimeout(gone, 400);
     done();
   };
   bg.addEventListener("click", (ev) => {

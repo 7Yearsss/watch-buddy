@@ -75,6 +75,7 @@ import { dayPhase, fmtClock, sleepWindow, type DayPhase } from "@pulseling/game"
 import { CHANNEL_DEFAULT, CHANNEL_NAME, noticesFor, smartStackRelevance, type Notice } from "@pulseling/game";
 import { HINT, ITEMS, MOVE_NAME, SURPRISE_ICON, TREASURE_ITEMS, type IdleMove } from "@pulseling/game";
 import { WISH_LABEL, type Wish } from "@pulseling/game";
+import { morph, setMorphReducedMotion } from "./morph";
 
 type Tab = "today" | "pet" | "dex" | "battle" | "data";
 type SliderKey = "steps" | "sleepHours" | "bedtime" | "cardio" | "strength" | "hiit" | "deep";
@@ -133,6 +134,7 @@ function toDayInput(v: Sliders): DayInput {
 let state: GameState | null = load();
 let tab: Tab = "today";
 /** First run: pick an egg → why we read Health data (priming) → system sheet → reading 28 days → hatch. */
+let hatchTimer: ReturnType<typeof setTimeout> | undefined;
 let setup: { starter: Starter; persona: PersonaId; step: "egg" | "health" | "sheet" | "reading"; denied: boolean; pending: GameState | null } = { starter: "fire", persona: "walker", step: "egg", denied: false, pending: null };
 let sliders: Sliders = { ...PRESETS.normal!.v };
 interface ReplayState { report: BattleReport; mine: Omit<SpriteSpec, "frame">; theirs: Omit<SpriteSpec, "frame">; step: number; boss: boolean; title?: string; theirName?: string }
@@ -157,6 +159,15 @@ let charging: { friendId: string; start: number; onWatch?: boolean } | null = nu
 type WatchPage = "pet" | "today" | "battle";
 const WATCH_PAGES: WatchPage[] = ["pet", "today", "battle"];
 let watchPage: WatchPage = "pet";
+/** +1 when the crown moved down a page, -1 up: the new page slides in from that side. */
+let pageDir = 1;
+function goPage(p: WatchPage) {
+  if (p === watchPage) return;
+  pageDir = WATCH_PAGES.indexOf(p) > WATCH_PAGES.indexOf(watchPage) ? 1 : -1;
+  watchPage = p;
+  watchResult = null;
+  render();
+}
 let watchResult: string | null = null;
 let lastFriendReplay: ReplayState | null = null;
 /** Preview panel under the watch: watch-face complications, Smart Stack card, notifications. */
@@ -179,6 +190,7 @@ function applyReduceMotion() {
   setReducedMotion(reduceMotion());
 }
 let heart = false;
+let heartAt = 0;
 let moveAnim: IdleMove | null = null;
 let bubbleAt = 0;
 /** Always-On (wrist down): static dimmed sleeping frame, big clock, nothing animates (07 §4). */
@@ -203,8 +215,9 @@ let openLetter: string | null = null;
 /** Watch version of the morning card: 3 screens, ~1s each, tap to advance (07 §1). */
 let watchCard: { card: MorningCard; step: number } | null = null;
 let watchCardTimer: ReturnType<typeof setInterval> | undefined;
-/** The phone card animates once per morning; later renders show it settled. */
+/** The phone card animates once per morning; re-renders leave it running, then it stays settled. */
 let phoneCardShown: string | null = state?.morning?.date ?? null;
+let phoneCardAnim: { date: string; until: number; skipped: boolean } | null = null;
 const WATCH_SCREENS = 3;
 
 const app = document.getElementById("app")!;
@@ -214,6 +227,19 @@ const enc = (spec: Omit<SpriteSpec, "frame">) => encodeURIComponent(JSON.stringi
 const canvas = (spec: Omit<SpriteSpec, "frame">, cls = "") => `<canvas data-sprite="${enc(spec)}" class="${cls}" role="img" aria-label="${describeSprite(spec)}"></canvas>`;
 const typePill = (t: ElementType | null) => (t ? `<span class="pill type" style="background:${PALETTES[t].main}">${TYPE_NAME[t]}</span>` : `<span class="pill">无属性</span>`);
 const pct = (x: number) => `${Math.round(x * 100)}%`;
+/** One look for every "pick one of these" control (tabs, filters, skills, tactics): selected = filled, aria-pressed. */
+const seg = (on: boolean, attrs: string, label: string) => `<button class="seg small ${on ? "on" : ""}" aria-pressed="${on}" ${attrs}>${label}</button>`;
+
+/** Short note at the bottom of the screen; when it carries an undo, the action already happened and can be taken back. */
+let toast: { id: number; text: string; undo?: () => void } | null = null;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function showToast(text: string, undo?: () => void) {
+  toast = { id: (toast?.id ?? 0) + 1, text, undo };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast = null; render(); }, undo ? 8000 : 3000);
+  render();
+}
+const renderToast = () => (toast ? `<div class="toast" role="status" data-key="toast-${toast.id}" data-exit><span>${toast.text}</span>${toast.undo ? '<button class="small" data-act="undo">撤销</button>' : ""}</div>` : "");
 
 function petSpec(pet: PetState, variant: AdultVariant | undefined = pet.adultVariant, stage: PetState["stage"] = pet.stage, mood?: SpriteSpec["mood"]): Omit<SpriteSpec, "frame"> {
   const secondary = stage === "adult" && variant && variant !== "pure" ? (variant as ElementType) : null;
@@ -251,7 +277,7 @@ function renderStart(): string {
       <p class="muted">它会读你过去一个月的健康数据，当场孵化。以后你怎么生活，它就怎么长大。</p>
       <div class="choices">
         ${(["grass", "water", "fire"] as Starter[])
-          .map((t) => `<div class="choice ${setup.starter === t ? "on" : ""}" data-act="starter" data-v="${t}">${canvas({ primary: t, stage: "egg" })}<div>${TYPE_NAME[t]}系</div><div class="muted" style="font-size:12px">${{ grass: "爱走路的会更快长大", water: "睡得好的会更快长大", fire: "爱运动的会更快长大" }[t]}</div></div>`)
+          .map((t) => `<div class="choice ${setup.starter === t ? "on" : ""}" role="button" tabindex="0" aria-pressed="${setup.starter === t}" data-act="starter" data-v="${t}">${canvas({ primary: t, stage: "egg" })}<div>${TYPE_NAME[t]}系</div><div class="muted" style="font-size:12px">${{ grass: "爱走路的会更快长大", water: "睡得好的会更快长大", fire: "爱运动的会更快长大" }[t]}</div></div>`)
           .join("")}
       </div>
       <p class="muted" style="font-size:12px">三种蛋最终都能进化成任何形态，只是起点不同。</p>
@@ -275,7 +301,7 @@ function renderStart(): string {
       <button class="primary" data-act="ob-sheet">好，去授权</button>
       <button data-act="ob-deny">先不授权，直接孵化</button>
       <div class="card"><h3 style="margin-top:0">原型专用：模拟"过去一个月的你"</h3><div class="personas">
-        ${PERSONAS.map((p) => `<button class="small ${setup.persona === p.id ? "primary" : ""}" data-act="persona" data-v="${p.id}">${PERSONA_NAME[p.id]}</button>`).join("")}
+        ${PERSONAS.map((p) => seg(setup.persona === p.id, `data-act="persona" data-v="${p.id}"`, PERSONA_NAME[p.id])).join("")}
       </div></div>
       ${setup.step === "sheet" ? renderHealthSheet() : ""}
     </div>`;
@@ -290,7 +316,7 @@ function renderStart(): string {
         f.avgSleepMinutes ? `每晚睡 ${Math.floor(f.avgSleepMinutes / 60)} 时 ${String(Math.round(f.avgSleepMinutes % 60)).padStart(2, "0")} 分` : "睡眠数据不多",
         (f.weeklyCardioMinutes ?? 0) >= 30 ? `每周有氧 ${Math.round(f.weeklyCardioMinutes ?? 0)} 分钟` : (f.weeklyStrengthMinutes ?? 0) >= 20 ? `每周力量训练 ${Math.round(f.weeklyStrengthMinutes ?? 0)} 分钟` : "蛋里开始有动静了……",
       ];
-  return `<div class="start stack ob-reading">
+  return `<div class="start stack ob-reading" data-act="ob-skip" title="点一下直接孵化">
     ${dots}
     <div style="text-align:center">${canvas({ primary: setup.starter, stage: "egg" })}</div>
     ${lines.map((l, i) => `<p class="ob-line" style="animation-delay:${0.2 + i * 0.7}s">${l}</p>`).join("")}
@@ -300,7 +326,7 @@ function renderStart(): string {
 /** Mock of the fixed iOS Health sheet: the app can't customise it, which is why the priming screen above matters. */
 function renderHealthSheet(): string {
   const items = ["步数", "站立时间", "活动能量", "体能训练", "睡眠", "静息心率", "心率变异性", "已爬楼层"];
-  return `<div class="modal-bg"><div class="modal ios-sheet">
+  return `<div class="modal-bg" data-key="m-sheet" data-exit><div class="modal ios-sheet" role="dialog" aria-modal="true">
     <div class="muted" style="font-size:12px;text-align:center">（模拟系统弹窗，App 不能改它的样子）</div>
     <h2 style="text-align:center">"Pulseling"想要访问你的健康数据</h2>
     <div class="row" style="justify-content:space-between"><b>全部打开</b><input type="checkbox" checked disabled></div>
@@ -389,14 +415,14 @@ function renderWatch(s: GameState): string {
   const page =
     watchPage === "today" ? watchToday(s, st) :
     watchPage === "battle" ? watchBattle(s) :
-    `${needsAttention(s) && !bubble ? '<div class="attn">!</div>' : ""}
-      ${bubble ? `<div class="bubble">${bubble}</div>` : ""}
+    `${needsAttention(s) && !bubble ? '<div class="attn" data-key="attn" data-exit>!</div>' : ""}
+      ${bubble ? `<div class="bubble" data-key="b${Math.round(bubbleAt)}" data-exit>${bubble}</div>` : ""}
       ${canvas(spec, `pet-tap${moveAnim ? ` mv-${moveAnim}` : ""}`)}
-      ${heart ? '<div class="heart">♥</div>' : ""}`;
+      ${heart ? `<div class="heart" data-key="h${Math.round(heartAt)}">♥</div>` : ""}`;
   return `<div class="watch-wrap">
-    ${watchCard ? watchCardFace(s, watchCard) : `<div class="watch page-${watchPage} phase-${phaseOf(s)}" data-crown="1">
+    ${watchCard ? watchCardFace(s, watchCard) : `<div class="watch phase-${phaseOf(s)}" data-key="watch" data-crown="1">
       <div class="clock">${clockNow()}</div>
-      ${page}
+      <div class="wpage" data-key="wp-${watchPage}" style="--dir:${pageDir}">${page}</div>
       ${asleep ? "" : pager}
     </div>`}
     ${freshWorkout() && heart ? '<div class="haptic">【震动：成功】运动保存几分钟后，下次抬腕时</div>' : ""}
@@ -416,7 +442,7 @@ function watchToday(s: GameState, st: ReturnType<typeof status>): string {
   const bossIn = daysUntilBoss(s);
   return `<div class="wp">
     <div class="wc-ring" style="--from:${p};--to:${p}">${canvas(petSpec(s.pet, undefined, undefined, currentMood(s)))}</div>
-    <div class="wp-big">${s.pet.stage === "adult" ? "成熟体" : `进化 ${pct(p)}`}</div>
+    <div class="wp-big">${s.pet.stage === "adult" ? "成熟体" : `进化 <span data-num>${pct(p)}</span>`}</div>
     <div class="wp-line">${last ? `昨天 +${Math.round(last.gain)}` : "第一天"} · ${line}</div>
     ${openWish(s) ? `<div class="wp-dim">心愿：${openWish(s)!.short}</div>` : ""}
     <div class="wp-dim">Boss ${bossIn === 0 ? "就是今天" : `还有 ${bossIn} 天`}</div>
@@ -429,7 +455,7 @@ function watchBattle(s: GameState): string {
     return `<div class="wp" data-act="charge">
       <div class="wp-big">vs ${chargeTargetName(s, charging.friendId)}</div>
       <div class="wp-line">走到中间时点一下</div>
-      <div class="gauge w"><div class="gauge-sweet"></div><div class="gauge-mark"></div></div>
+      <div class="gauge w"><div class="gauge-sweet"></div><div class="gauge-mark" data-keep-style></div></div>
       <div class="wp-dim">点屏幕任意位置蓄力</div>
     </div>`;
   }
@@ -466,7 +492,7 @@ function watchCardFace(s: GameState, w: { card: MorningCard; step: number }): st
     body = `<div class="wc-ring" style="--from:${c.from};--to:${c.to}">${canvas(petSpec(s.pet, undefined, undefined, "happy"))}</div>
       <div class="wc-cap">成长 +${c.gain}<br><span class="${encounter ? "wc-alert" : "wc-dim"}">${encounter ? "！" : ""}${c.surprise.short}</span></div>`;
   }
-  return `<div class="watch wc" data-act="wc-next"><div class="clock">${clockNow()}</div><div class="wc-screen" data-step="${w.step}">${body}</div>${dots}</div>`;
+  return `<div class="watch wc" data-key="wc" data-act="wc-next"><div class="clock">${clockNow()}</div><div class="wc-screen" data-key="wc${w.step}">${body}</div>${dots}</div>`;
 }
 
 function playWatchCard(card: MorningCard) {
@@ -486,25 +512,19 @@ function nextWatchScreen() {
   repaintWatch();
 }
 
-/** Swap only the watch so the phone card's animation isn't restarted. */
-function repaintWatch() {
-  const wrap = app.querySelector(".watch-wrap");
-  if (!wrap || !state) return render();
-  const tmp = document.createElement("div");
-  tmp.innerHTML = renderWatch(state);
-  wrap.replaceWith(tmp.firstElementChild!);
-  drawAll();
-}
+/** morph() keeps the phone card's animation running, so a full render is safe here. */
+const repaintWatch = () => render();
 
 function renderMorningCard(s: GameState): string {
   const st = status(s);
   const c = morningCard(s, st.progress, st.threshold);
   if (!c) return "";
-  const animate = phoneCardShown !== c.date;
-  phoneCardShown = c.date;
+  if (phoneCardShown !== c.date) { phoneCardShown = c.date; phoneCardAnim = { date: c.date, until: performance.now() + 5000, skipped: false }; }
+  const animate = !!phoneCardAnim && phoneCardAnim.date === c.date && performance.now() < phoneCardAnim.until;
+  const skipped = animate && phoneCardAnim!.skipped;
   const icon = { good: "☀ 睡得好", ok: "☁ 还行", short: "☾ 有点少", none: "· 按普通的一晚算" }[c.night.icon];
   const stageLabel = s.pet.stage === "adult" ? "已经是成熟体" : `进化 ${pct(c.to)}`;
-  return `<div class="card mc ${animate ? "anim" : ""}" data-act="mc-skip">
+  return `<div class="card mc ${animate ? "anim" : ""} ${skipped ? "skip" : ""}" data-key="mc-${c.date}" ${animate && !skipped ? 'data-act="mc-skip"' : ""}>
     <div class="mc-step"><h3>昨晚</h3><p><b>${c.night.icon === "none" ? "手表在充电" : c.night.text}</b> <span class="muted">${icon}</span></p></div>
     <div class="mc-step"><h3>昨天</h3>${c.highlights.map((h) => `<p>${h}</p>`).join("")}</div>
     <div class="mc-step"><h3>成长</h3><p>今天 <b>+${c.gain}</b> <span class="muted">${stageLabel}</span></p>
@@ -512,7 +532,7 @@ function renderMorningCard(s: GameState): string {
     <div class="mc-step"><h3>${c.surprise.label}</h3><p class="${c.surprise.kind === "capture" ? "good" : ""}">${c.surprise.text}</p>
       ${c.extras.map((x) => `<p class="${x.good ? "good" : "muted"}">${x.text}</p>`).join("")}</div>
     ${c.wish ? `<div class="mc-step"><h3>今天的小心愿 · ${c.wish.label}</h3><p>${c.wish.text}</p></div>` : ""}
-    ${animate ? '<div class="muted mc-hint">点一下跳过</div>' : ""}
+    ${animate && !skipped ? '<div class="muted mc-hint">点一下跳过</div>' : ""}
   </div>`;
 }
 
@@ -530,9 +550,9 @@ function glanceFacts(s: GameState) {
 
 /** Everything you see without opening the app: complications (4 WidgetKit families), Smart Stack, notifications. */
 function renderComplications(s: GameState, st: ReturnType<typeof status>): string {
-  const tabs = (["faces", "stack", "notices"] as const).map((t) => `<button class="small ${glanceTab === t ? "primary" : ""}" data-act="glance" data-v="${t}">${{ faces: "表盘", stack: "智能叠放", notices: "通知" }[t]}</button>`).join("");
+  const tabs = (["faces", "stack", "notices"] as const).map((t) => seg(glanceTab === t, `data-act="glance" data-v="${t}"`, { faces: "表盘", stack: "智能叠放", notices: "通知" }[t])).join("");
   const body = glanceTab === "faces" ? renderFaces(s, st) : glanceTab === "stack" ? renderStack(s) : renderNotices(s);
-  return `<div class="complications"><div class="row" style="justify-content:center">${tabs}</div>${body}</div>`;
+  return `<div class="complications"><div class="row" style="justify-content:center">${tabs}</div><div class="fade-swap" data-key="g-${glanceTab}">${body}</div></div>`;
 }
 
 /** Corner family: a 90° gauge hugging the bezel. */
@@ -562,7 +582,7 @@ function renderFaces(s: GameState, st: ReturnType<typeof status>): string {
 
 function renderStack(s: GameState): string {
   const r = smartStackRelevance(s, glanceFacts(s), stackHour);
-  const hours = [7, 13, 22].map((h) => `<button class="small ${stackHour === h ? "primary" : ""}" data-act="stack-hour" data-v="${h}">${h}:00</button>`).join("");
+  const hours = [7, 13, 22].map((h) => seg(stackHour === h, `data-act="stack-hour" data-v="${h}"`, `${h}:00`)).join("");
   return `<div class="stack-prev">
     <div class="row" style="justify-content:center">${hours}</div>
     <div class="ss ${r.score >= 0.6 ? "top" : ""}">
@@ -584,7 +604,7 @@ function renderNotices(s: GameState): string {
     ${held.map((n) => `<div class="muted" style="font-size:12px">已关闭「${CHANNEL_NAME[n.channel]}」，不发：${n.text}</div>`).join("")}
     <h3>通知设置</h3>
     ${(Object.keys(CHANNEL_NAME) as Notice["channel"][]).map((c) => `<label class="toggle"><input type="checkbox" data-channel="${c}" ${channels[c] ? "checked" : ""}/> ${CHANNEL_NAME[c]}</label>`).join("")}
-    <div class="row" style="margin-top:6px"><span class="muted" style="font-size:12px">模拟离开：</span>${[0, 3, 7].map((d) => `<button class="small ${daysAway === d ? "primary" : ""}" data-act="away" data-v="${d}">${d} 天</button>`).join("")}</div>
+    <div class="row" style="margin-top:6px"><span class="muted" style="font-size:12px">模拟离开：</span>${[0, 3, 7].map((d) => seg(daysAway === d, `data-act="away" data-v="${d}"`, `${d} 天`)).join("")}</div>
     <p class="muted" style="font-size:12px">规则：每天最多 1 条早上的通知，挑最重要的一件事；不超过 25 个字；宠物第一人称；不提连胜、不让人内疚。离开 3 天和 7 天各发一条温柔的，之后不再发。</p>
   </div>`;
 }
@@ -611,7 +631,7 @@ function renderToday(s: GameState): string {
     <div class="card"><h2>今早的试炼</h2>
       ${
         !m
-          ? `<p>${hatchLine(s.pet.personality, s.facts)}</p><p class="muted">在右边设置今天的健康数据，然后"过完这一天"。</p>`
+          ? `<p>${hatchLine(s.pet.personality, s.facts)}</p><p class="muted">在「假健康数据」里设好今天的数据，然后点"过完这一天"。</p>`
           : `<p>${watchLine(s)}</p>
         ${m.encounter ? `<h3>遇到野怪</h3>${battleSummary(m.trial, false)}${m.newSpecies ? `<p class="good">收服成功，图鉴已解锁！${m.newSkill ? `学会了 ${skillName(m.newSkill)}。` : ""}</p>` : m.captured ? `<p class="muted">已经收服过了，得到闪光碎片。</p>` : `<p class="muted">没打赢，图鉴里留下了剪影。</p>`}`
           : `<p class="muted">今天没遇到野怪（${s.daysSinceEncounter} 天没遇到了，连续 4 天没遇到第 5 天必遇）。每日试炼对手是训练假人。</p>${battleSummary(m.trial, false)}`}`
@@ -633,7 +653,7 @@ function renderWish(s: GameState): string {
   if (!w) return "";
   return `<div class="card"><h2>今天的小心愿 <span class="pill">${WISH_LABEL[w.kind]}</span></h2>
     <p>${w.text}</p>
-    <p class="muted" style="font-size:12px">可选的，没做到也没关系，什么都不会扣。做到了明早有成长值，偶尔还会让第二天更容易遇到野怪。难度按你最近两周自己的水平定。已经实现过 ${kept} 个心愿。</p>
+    <p class="muted" style="font-size:12px">可选的，没做到也没关系，什么都不会扣。做到了明早有成长值，偶尔还会让第二天更容易遇到野怪。难度按你最近两周自己的水平定。${kept ? `已经实现过 ${kept} 个心愿。` : ""}</p>
   </div>`;
 }
 
@@ -641,9 +661,9 @@ function renderChat(s: GameState): string {
   const left = chatsLeft(s);
   const today = s.chat.log.filter((l) => l.date === s.today);
   const off = left <= 0 || s.trial === "offered" ? "disabled" : "";
-  return `<div class="card"><h2>跟它说句话 <span class="muted" style="font-size:12px;font-weight:400">今天还能说 ${left}/${CHATS_PER_DAY} 句</span></h2>
+  return `<div class="card"><h2>跟它说句话 ${off ? "" : `<span class="muted" style="font-size:12px;font-weight:400">今天还能说 <span data-num>${left}</span>/${CHATS_PER_DAY} 句</span>`}</h2>
     <div class="chat">${today.map((l) => `<div class="msg ${l.from}">${l.text}</div>`).join("") || '<div class="muted">每天可以跟它说 3 句话。说出口的承诺它会记得，第二天对照你的数据。</div>'}</div>
-    <div class="row" style="margin-top:8px">${REPLIES.map((x) => `<button class="small" data-act="chat" data-v="${x.id}" ${off}>${x.label}</button>`).join("")}</div>
+    ${off ? `<p class="muted" style="font-size:12px;margin:8px 0 0">${s.trial === "offered" ? "它在冬眠，叫醒它再聊" : "今天说够了，明天再聊"}</p>` : `<div class="row" style="margin-top:8px">${REPLIES.map((x) => `<button class="small" data-act="chat" data-v="${x.id}">${x.label}</button>`).join("")}</div>`}
     ${s.memories.length ? `<h3>它记得的事</h3><ul class="feed">${s.memories.slice(0, 5).map((mm) => `<li><span class="muted">${mm.date.slice(5)}</span> ${mm.text}</li>`).join("")}</ul>` : ""}
     <p class="muted" style="font-size:12px">原型里是预设回复；正式版用 AI 生成，会结合你的健康数据和记忆。</p>
   </div>`;
@@ -682,7 +702,7 @@ function renderPet(s: GameState): string {
         return `<div class="option ${isTarget ? "target" : ""}">${canvas(petSpec(pet, o.variant, "adult"))}
           <div><b>${VARIANT_NAME[o.variant]}</b> ${o.met ? '<span class="good">✓ 已达标</span>' : ""}</div>
           <div class="muted">${VARIANT_HINT[o.variant] ?? ""}</div>
-          ${o.gaps.map((g) => `<div class="bad">${gapText(g)}</div>`).join("")}
+          ${o.gaps.map((g) => `<div class="muted">还差：${gapText(g)}</div>`).join("")}
           <div class="row" style="justify-content:center;margin-top:4px">
             <button class="small" data-act="target" data-v="${isTarget ? "" : o.variant}">${isTarget ? "取消目标" : "设为目标"}</button>
             ${st.ready && o.met ? `<button class="small primary" data-act="evolve" data-v="${o.variant}">现在进化</button>` : ""}
@@ -698,7 +718,7 @@ function renderPet(s: GameState): string {
       <h3>进化</h3>${evo}
     </div>
     <div class="card"><h2>属性</h2>
-      <div class="stats">${STATS.map((k) => `<span>${STAT_NAME[k]}</span><div class="meter"><i style="width:${Math.min(100, (stats[k] / 150) * 100)}%"></i></div><span>${Math.round(stats[k])}</span>`).join("")}</div>
+      <div class="stats">${STATS.map((k) => `<span>${STAT_NAME[k]}</span><div class="meter"><i style="--v:${Math.min(1, stats[k] / 150).toFixed(3)}"></i></div><span data-num>${Math.round(stats[k])}</span>`).join("")}</div>
       <p class="muted">状态加成 ×${condition(s).toFixed(2)}（最近 3 天睡得好、动得多会提高，只加不减）</p>
       <h3>最近 14 天的成长（每天 10–20）</h3>
       <div class="chart">${s.results.slice(-14).map((x) => `<div class="col" title="${x.date} +${Math.round(x.gain)}"><i style="height:${Math.round((x.gain / 20) * 100)}%"></i><span>${x.date.slice(8)}</span></div>`).join("") || '<span class="muted">还没有数据</span>'}</div>
@@ -720,7 +740,7 @@ function renderPet(s: GameState): string {
 function renderCollection(s: GameState): string {
   const all = [...Object.values(ITEMS).flat(), ...TREASURE_ITEMS];
   const got = all.filter((i) => s.collection[i]);
-  return `<div class="card"><h2>收藏册 ${got.length} / ${all.length}</h2>
+  return `<div class="card"><h2>收藏册 <span data-num>${got.length}</span> / ${all.length}</h2>
     <div class="items">${all.map((i) => `<span class="item ${s.collection[i] ? "" : "locked"}" title="${i}">${s.collection[i] ? `${SURPRISE_ICON.item} ${i}${s.collection[i]! > 1 ? ` ×${s.collection[i]}` : ""}` : "？？"}</span>`).join("")}</div>
     <p class="muted" style="font-size:12px">没遇到野怪的早上会捡到小东西，跟昨天最突出的那件事有关；最后 ${TREASURE_ITEMS.length} 件只能从藏宝图的宝箱里开出来。只是收藏，不加战斗力。</p>
     <h3>会的动作</h3>
@@ -732,7 +752,7 @@ const typesHtml = (pet: PetState) => petTypes(pet).map((t) => typePill(t)).join(
 
 function renderDex(s: GameState): string {
   const captured = Object.values(s.dex).filter((e) => e.captured).length;
-  return `<div class="card"><h2>图鉴 ${captured} / ${ROSTER.length}</h2>
+  return `<div class="card"><h2>图鉴 <span data-num>${captured}</span> / ${ROSTER.length}</h2>
     <div class="dex">${ROSTER.map((sp) => {
       const e = s.dex[sp.id];
       if (!e) return `<div class="cell" data-act="dex" data-v="${sp.id}" role="button" tabindex="0"><div style="height:48px;line-height:48px" class="muted">?</div><div class="muted">？？？</div></div>`;
@@ -754,10 +774,10 @@ function renderDexDetail(s: GameState): string {
     : `${canvas(wildSpec(sp.id, e.shiny), e.captured ? "" : "silhouette")}<h2>${e.captured ? speciesName(sp.id) : "剪影"}</h2>
        <div class="row" style="justify-content:center">${typePill(type)}<span class="pill">${rarityLabel(sp.rarity)}</span>${e.shiny ? '<span class="pill">✨闪光</span>' : ""}</div>
        <p>${e.captured ? `${e.captured.slice(5)} 收服 · 教会了 <b>${skillName(sp.teaches)}</b>` : `${e.seen.slice(5)} 见过 · 打赢它就能收服，学会一个${TYPE_NAME[type]}系技能`}</p>`;
-  return `<div class="modal-bg"><div class="modal stack" style="text-align:center">
+  return `<div class="modal-bg" data-key="m-dex" data-close="dex-close" data-exit><div class="modal stack" role="dialog" aria-modal="true" style="text-align:center">
     ${body}
     <div class="card" style="text-align:left"><b>怎么遇到它</b><p class="muted" style="margin:4px 0 0">${habitHint(sp.type)}的日子，${TYPE_NAME[type]}系野怪更容易出现。${sp.rarity === "common" ? "" : "它比较少见，多试几天。"}</p></div>
-    <button class="small primary" data-act="dex-close">好</button>
+    <button class="small primary" data-act="dex-close">关闭</button>
   </div></div>`;
 }
 
@@ -778,7 +798,7 @@ function renderFriends(s: GameState): string {
         <div><b>${f.name}</b> ${typesHtml(fs.pet)} <span class="pill">${rarityLabel(fs.pet.rarity)}</span></div>
         <div class="muted">${stage} · 战绩 ${wins} 胜 ${rec.length - wins} 负</div>
         ${matchupHint(s, fs)}
-      </div><button class="small ${done ? "" : "primary"}" data-act="friend" data-v="${f.id}" ${done || s.trial === "offered" ? "disabled" : ""}>${done ? "今天切磋过了" : "切磋"}</button>${done && lastFriendReplay?.theirName === f.name ? '<button class="small replay-btn" data-act="replay-friend">看回放</button>' : ""}</div>`;
+      </div>${done ? `<span class="muted friend-done">今天切磋过了 ✓${lastFriendReplay?.theirName === f.name ? '<button class="small" data-act="replay-friend">看回放</button>' : ""}</span>` : s.trial === "offered" ? "" : `<button class="small primary" data-act="friend" data-v="${f.id}">切磋</button>`}</div>`;
     }).join("")}
     <p class="muted" style="font-size:12px">打的是好友宠物的"快照"（它昨天同步时的样子），对方不用在线。原型里的三位好友是模拟出来的不同生活习惯的人。你的好友码：PL-${s.userId.slice(-4).toUpperCase()}</p>
   </div>`;
@@ -803,11 +823,12 @@ const chargeTargetName = (s: GameState, id: string) => (id === BOSS_ID ? `${TYPE
 function renderCharge(): string {
   if (!charging || !state || charging.onWatch) return "";
   const name = chargeTargetName(state, charging.friendId);
-  return `<div class="modal-bg"><div class="modal stack" style="text-align:center">
+  return `<div class="modal-bg" data-key="m-charge" data-close="charge-cancel" data-exit><div class="modal stack" role="dialog" aria-modal="true" style="text-align:center">
     <h2>${charging.friendId === BOSS_ID ? `挑战${name}` : `跟${name}切磋`}</h2>
-    <p class="muted">手表上：标记走到中间时点一下，开场伤害最多 +6%</p>
-    <div class="gauge"><div class="gauge-sweet"></div><div class="gauge-mark"></div></div>
-    <button class="primary" data-act="charge">蓄力！</button>
+    <p class="muted">黄色标记走到绿色区域时点「蓄力！」，开场伤害最多 +6%</p>
+    <div class="gauge"><div class="gauge-sweet"></div><div class="gauge-mark" data-keep-style></div></div>
+    <button class="primary" data-act="charge" data-autofocus>蓄力！</button>
+    <button class="small" data-act="charge-cancel">先不打了</button>
   </div></div>`;
 }
 
@@ -829,12 +850,12 @@ function renderBattle(s: GameState): string {
           const sk = getSkill(id);
           const on = loadout.includes(id);
           const eff = sk.type ? effectiveness(sk.type, [bossType]) : 1;
-          return `<button class="small ${on ? "primary" : ""}" data-act="skill" data-v="${id}">${skillName(id)} ${sk.type ? TYPE_NAME[sk.type] : ""}${eff > 1 ? " ▲" : eff < 1 ? " ▼" : ""}</button>`;
+          return seg(on, `data-act="skill" data-v="${id}"`, `${skillName(id)} ${sk.type ? TYPE_NAME[sk.type] : ""}${eff > 1 ? " ▲" : eff < 1 ? " ▼" : ""}`);
         })
         .join("")}</div>
       <p class="muted">▲ 克制本周 Boss，▼ 被抵抗。至少 2 个本系技能。</p>
       ${err ? `<p class="bad">${err}</p>` : ""}
-      <h3>战术</h3><div class="row">${(["aggressive", "balanced", "cautious"] as Tactic[]).map((t) => `<button class="small ${s.tactic === t ? "primary" : ""}" data-act="tactic" data-v="${t}">${TACTIC_NAME[t]}</button>`).join("")}</div>
+      <h3>战术</h3><div class="row">${(["aggressive", "balanced", "cautious"] as Tactic[]).map((t) => seg(s.tactic === t, `data-act="tactic" data-v="${t}"`, TACTIC_NAME[t])).join("")}</div>
     </div>
     <div class="card"><h2>历次 Boss</h2>${s.bosses.length ? s.bosses.slice(0, 6).map((b) => `<div>${b.date.slice(5)} ${typePill(b.opponentType as ElementType)} <span class="${b.result.winner === "a" ? "good" : "bad"}">${b.result.winner === "a" ? "胜" : "负"}</span></div>`).join("") : '<p class="muted">还没打过。第一个 Boss 在第 6 天。</p>'}</div>
   </div>`;
@@ -857,7 +878,7 @@ function renderDev(s: GameState): string {
     <label style="grid-template-columns:auto 1fr"><input type="checkbox" data-a11y="reduce" ${forceReduce ? "checked" : ""}/><span>模拟"减弱动态效果"（系统设置开了也会生效）</span></label>
     <h3>原型说明</h3>
     <p class="muted" style="font-size:12px">游戏规则全部来自 packages/engine（和服务器以后用的是同一套）。宠物说的话是模板，以后换成 AI。进度存在浏览器里。</p>
-    <button class="small" data-act="reset">重新开始</button>
+    <button class="small danger" data-act="reset" data-v="已重新开始">重新开始</button>
   </div>`;
 }
 
@@ -875,14 +896,14 @@ function renderData(s: GameState): string {
     <p class="muted">这就是每天上传到服务器的全部内容：一行每日汇总。心率明细、睡眠各阶段的原始记录都留在你的手机上，只上传算好的结果；不上传位置。</p>
     ${last ? `<h3>${last.date} 上传的数据</h3><table class="kv">${rows}</table>` : '<p class="muted">还没有上传过。</p>'}
     <p class="muted">运动记录还会上传每次一行摘要（类型、开始时间、时长、距离、平均心率），不含 GPS 路线。</p>
-    <button data-act="reset">删除全部数据</button>
+    <button class="danger" data-act="reset" data-v="删除了全部数据">删除全部数据</button>
   </div></div>`;
 }
 
 function renderLetter(s: GameState): string {
   const l = s.letters.find((x) => x.date === openLetter);
   if (!l) return "";
-  return `<div class="modal-bg"><div class="modal letter">
+  return `<div class="modal-bg" data-key="m-letter" data-close="close-letter" data-exit><div class="modal letter" role="dialog" aria-modal="true">
     <h2>来自你的 Pulseling · ${l.date.slice(5)}</h2>
     <div class="row" style="justify-content:center">${canvas(petSpec(s.pet))}</div>
     <p style="white-space:pre-wrap">${l.text}</p>
@@ -892,7 +913,7 @@ function renderLetter(s: GameState): string {
 
 function renderPaywall(s: GameState): string {
   const st = status(s);
-  return `<div class="modal-bg"><div class="modal stack" style="text-align:center">
+  return `<div class="modal-bg" data-key="m-paywall" data-close="trial-later" data-exit><div class="modal stack" role="dialog" aria-modal="true" style="text-align:center">
     <h2>它想继续长大</h2>
     <div>${canvas(petSpec(s.pet, undefined, "juvenile"), "silhouette")}</div>
     <p>进化进度 ${pct(Math.min(1, st.progress / st.threshold))}，它会变成这样……</p>
@@ -927,6 +948,7 @@ function actionFor(e: BattleEvent | undefined, side: "a" | "b", done: boolean, w
  * over the target, yellow when super effective, bigger on crits), shake only on crits and ultimates, 1×/2× speed,
  * and an end card naming the key moment. The text log is still there, folded.
  */
+let popSeq = 0;
 function popFor(e: BattleEvent | undefined): string {
   if (!e) return "";
   const target = e.kind === "heal" || e.kind === "shield" ? e.actor : e.actor === "a" ? "b" : "a";
@@ -942,7 +964,7 @@ function popFor(e: BattleEvent | undefined): string {
     cls = `dmg${eff > 1 ? " super" : eff < 1 ? " weak" : ""}${e.crit ? " crit" : ""}`;
   }
   const tag = e.kind === "ultimate" ? '<div class="pop-tag">大招！</div>' : (e.effectiveness ?? 1) > 1 && !e.dodged && e.damage ? '<div class="pop-tag">效果拔群</div>' : e.crit ? '<div class="pop-tag">暴击</div>' : "";
-  return `<div class="pop ${side} ${cls}">${tag}${text}</div>`;
+  return `<div class="pop ${side} ${cls}" data-key="pop-${popSeq}">${tag}${text}</div>`;
 }
 
 function shareCardFor(s: GameState, kind: "pet" | "boss" | "dex"): ShareCard {
@@ -965,7 +987,7 @@ function shareCardFor(s: GameState, kind: "pet" | "boss" | "dex"): ShareCard {
 }
 
 function renderShare(): string {
-  return `<div class="modal-bg"><div class="modal stack share-modal" style="text-align:center">
+  return `<div class="modal-bg" data-key="m-share" data-close="share-close" data-exit><div class="modal stack share-modal" role="dialog" aria-modal="true" style="text-align:center">
     <canvas class="share-preview" width="1080" height="1920"></canvas>
     <label class="toggle" style="justify-content:center"><input type="checkbox" data-share-private="1" ${shareOpen?.includePrivate ? "checked" : ""}/> 加上我的健康数据（默认不加）</label>
     <div class="row" style="justify-content:center"><button class="primary small" data-act="share-save">保存图片</button><button class="small" data-act="share-close">关闭</button></div>
@@ -997,20 +1019,20 @@ function renderReplay(): string {
   const theirs = replay.theirName ?? speciesName(report.opponentName);
   const won = report.result.winner === "a";
   const shake = last && !reduceMotion() && (last.crit || last.kind === "ultimate") && !last.dodged ? "shake" : "";
-  const bar = (i: 0 | 1) => `<div class="hp"><i style="width:${pct(hp[i] / report.result.maxHp[i])}"></i></div>`;
-  return `<div class="modal-bg"><div class="modal replay">
+  const bar = (i: 0 | 1) => `<div class="hp"><i style="--v:${Math.max(0, hp[i] / report.result.maxHp[i]).toFixed(3)}"></i></div>`;
+  return `<div class="modal-bg" data-key="m-replay" data-close="close-replay" data-exit><div class="modal replay" role="dialog" aria-modal="true">
     <h2>${replay.title ?? (replay.boss ? "周 Boss" : "每日试炼")} · ${report.date.slice(5)}</h2>
-    <div class="stage ${shake}" data-step="${step}">
+    <div class="stage" data-shake="${shake ? step : ""}">
       <div class="fighter left"><div class="fname">我的宠物</div>${bar(0)}${canvas({ ...replay.mine, action: actionFor(last, "a", done, report.result.winner) })}</div>
       <div class="vs">${done ? "" : `第 ${last?.turn ?? 1} 回合`}</div>
       <div class="fighter right"><div class="fname">${theirs}</div>${bar(1)}${canvas({ ...replay.theirs, action: actionFor(last, "b", done, report.result.winner) }, "flip")}</div>
-      ${done ? "" : popFor(last)}
+      ${done ? "" : ((popSeq = step), popFor(last))}
       ${done ? `<div class="end ${won ? "win" : ""}">${won ? "胜利！" : report.result.winner === "draw" ? "平局" : "差一点！明天再来"}<div class="end-sub">${report.result.turns} 回合 · ${keyMoment(report, theirs)}</div></div>` : ""}
     </div>
     <details class="battle-details"><summary>文字记录</summary><div class="battle-log">${log.map((e) => `<div>第 ${e.turn} 回合：${eventText(e, "我", theirs)}</div>`).join("")}</div></details>
     <div class="row" style="margin-top:10px;justify-content:flex-end">
       ${done ? '<button class="small" data-act="replay-again">再看一遍</button>' : `<button class="small" data-act="replay-speed">${replaySpeed === 1 ? "2× 速" : "1× 速"}</button><button class="small" data-act="skip">跳到结果</button>`}
-      <button class="small primary" data-act="close-replay">关闭</button>
+      <button class="small primary" data-act="close-replay" data-autofocus>关闭</button>
     </div>
   </div></div>`;
 }
@@ -1020,14 +1042,14 @@ function render() {
   if (replay && replay !== replayClockFor) { replayClockFor = replay; startReplayClock(); }
   if (!replay) replayClockFor = null;
   if (!state) {
-    app.innerHTML = renderStart();
+    morph(app, renderStart() + renderToast());
   } else {
     const s = state;
     const body = { today: renderToday, pet: renderPet, dex: renderDex, battle: renderBattle, data: renderData }[tab](s);
-    app.innerHTML = `<div class="top"><h1>Pulseling 原型</h1><span class="muted">第 ${dayNumber(s)} 天</span><span class="spacer"></span>${s.trial === "active" ? '<span class="pill">试用中</span>' : ""}</div>
+    morph(app, `<div class="top"><h1>Pulseling 原型</h1><span class="muted">第 <span data-num>${dayNumber(s)}</span> 天</span><span class="spacer"></span>${s.trial === "active" ? '<span class="pill">试用中</span>' : ""}</div>
       <div class="layout">
         ${renderWatch(s)}
-        <div><div class="tabs">${(["today", "pet", "dex", "battle", "data"] as Tab[]).map((t) => `<button class="${tab === t ? "on" : ""}" data-act="tab" data-v="${t}">${{ today: "今天", pet: "宠物", dex: "图鉴", battle: "对战", data: "数据" }[t]}</button>`).join("")}</div>${body}</div>
+        <div><div class="tabs" role="tablist">${(["today", "pet", "dex", "battle", "data"] as Tab[]).map((t) => `<button class="seg ${tab === t ? "on" : ""}" role="tab" aria-selected="${tab === t}" data-act="tab" data-v="${t}">${{ today: "今天", pet: "宠物", dex: "图鉴", battle: "对战", data: "数据" }[t]}</button>`).join("")}</div><div class="tab-body" data-key="tab-${tab}">${body}</div></div>
         ${renderDev(s)}
       </div>
       ${s.trial === "offered" && !replay && !paywallHidden ? renderPaywall(s) : ""}
@@ -1035,10 +1057,37 @@ function render() {
       ${renderReplay()}
       ${openLetter ? renderLetter(s) : ""}
       ${shareOpen ? renderShare() : ""}
-      ${dexOpen ? renderDexDetail(s) : ""}`;
+      ${dexOpen ? renderDexDetail(s) : ""}
+      ${renderToast()}`);
   }
   drawAll();
+  afterRender();
   if (shareOpen) void paintShare();
+}
+
+/** One-off motion a class can't restart (the replay shake), and focus moving into a dialog that just opened. */
+let shookAt = "";
+let focusedDialog: Element | null = null;
+let lastFocus: HTMLElement | null = null;
+function afterRender() {
+  const stage = app.querySelector<HTMLElement>(".stage");
+  const sk = stage?.dataset.shake ?? "";
+  if (stage && sk && sk !== shookAt && !reduceMotion()) {
+    stage.animate(
+      [{ transform: "none" }, { transform: "translate(-4px,2px)" }, { transform: "translate(4px,-2px)" }, { transform: "translate(-2px,1px)" }, { transform: "none" }],
+      { duration: 240, easing: "linear" },
+    );
+  }
+  shookAt = sk;
+  const dialogs = app.querySelectorAll(".modal-bg:not([data-leaving])");
+  const top = dialogs[dialogs.length - 1] ?? null;
+  if (top && top !== focusedDialog) {
+    if (!focusedDialog) lastFocus = document.activeElement as HTMLElement | null;
+    (top.querySelector<HTMLElement>("[data-autofocus]") ?? top.querySelector<HTMLElement>("button.primary") ?? top.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
+  } else if (!top && focusedDialog && lastFocus?.isConnected) {
+    lastFocus.focus({ preventScroll: true });
+  }
+  focusedDialog = top;
 }
 
 function drawAll() {
@@ -1107,7 +1156,8 @@ app.addEventListener("click", (ev) => {
       setup.pending = newGame(setup.starter, setup.persona, undefined, undefined, setup.denied);
       setup.step = "reading";
       render();
-      setTimeout(() => {
+      clearTimeout(hatchTimer);
+      hatchTimer = setTimeout(() => {
         const next = setup.pending;
         setup = { ...setup, step: "egg", pending: null };
         if (next) update(next);
@@ -1122,7 +1172,25 @@ app.addEventListener("click", (ev) => {
       for (let i = 0; i < 7 && s.trial !== "offered"; i++) s = liveDay(s, personaDay(s, s.pet.starter, s.today));
       return update(s);
     }
-    case "reset": if (confirm("重新开始会清空当前进度，确定吗？")) { clearSave(); tab = "today"; update(null); } return;
+    case "reset": {
+      // Happens at once and can be taken back from the toast, instead of a blocking confirm().
+      const prev = state, prevTab = tab;
+      clearSave(); tab = "today";
+      replay = null; openLetter = null; shareOpen = null; dexOpen = null; charging = null;
+      update(null);
+      if (prev) showToast(v || "已清空", () => { tab = prevTab; seenMorning = prev.morning?.date ?? null; state = prev; save(prev); render(); });
+      return;
+    }
+    case "undo": { const u = toast?.undo; toast = null; clearTimeout(toastTimer); if (u) u(); else render(); return; }
+    case "ob-skip": {
+      if (setup.step !== "reading") return;
+      clearTimeout(hatchTimer);
+      const next = setup.pending;
+      setup = { ...setup, step: "egg", pending: null };
+      if (next) update(next);
+      return;
+    }
+    case "charge-cancel": charging = null; return render();
     case "target": return update(setTarget(state!, (v || undefined) as AdultVariant | undefined));
     case "evolve": return update(chooseEvolution(state!, v as AdultVariant));
     case "trial-start": return update(startTrial(state!));
@@ -1167,7 +1235,7 @@ app.addEventListener("click", (ev) => {
       a.href = c.toDataURL("image/png");
       a.download = `pulseling-${shareOpen?.kind ?? "card"}.png`;
       a.click();
-      return;
+      return showToast("图片已保存");
     }
     case "workout": {
       const [kind, min] = v.split(":") as [WorkoutKind, string];
@@ -1176,7 +1244,7 @@ app.addEventListener("click", (ev) => {
       if (kind === "cardio") sliders.steps = Math.min(20000, sliders.steps + minutes * 140);
       lastWorkout = { kind, minutes, at: performance.now() };
       aod = false;
-      heart = true;
+      heart = true; heartAt = performance.now();
       showBubble(`${WORKOUT_NAME[kind]} ${minutes} 分钟！辛苦啦`);
       render();
       setTimeout(() => { heart = false; render(); }, 1600);
@@ -1190,7 +1258,7 @@ app.addEventListener("click", (ev) => {
     case "boss": charging = { friendId: BOSS_ID, start: performance.now() }; render(); return animateGauge();
     case "w-friend": charging = { friendId: v, start: performance.now(), onWatch: true }; render(); return animateGauge();
     case "w-result": watchResult = null; return render();
-    case "wpage": watchPage = v as WatchPage; watchResult = null; return render();
+    case "wpage": return goPage(v as WatchPage);
     case "replay-friend": if (lastFriendReplay) replay = { ...lastFriendReplay, step: 0 }; return render();
     case "charge": {
       if (!charging || !state) return;
@@ -1218,7 +1286,7 @@ app.addEventListener("click", (ev) => {
       return render();
     }
     case "wc-next": clearInterval(watchCardTimer); watchCardTimer = setInterval(nextWatchScreen, 1300); return nextWatchScreen();
-    case "mc-skip": el.classList.add("skip"); el.querySelector(".mc-hint")?.remove(); return;
+    case "mc-skip": if (phoneCardAnim) phoneCardAnim.skipped = true; return render();
   }
 });
 
@@ -1229,7 +1297,7 @@ app.addEventListener("click", (ev) => {
       showBubble("zzz…（你也早点睡）");
       return render();
     }
-    heart = true;
+    heart = true; heartAt = performance.now();
     const moves = state.moves;
     moveAnim = moves.length ? moves[Math.floor(Math.random() * moves.length)]! : null;
     showBubble(moveAnim && Math.random() < 0.5 ? `（${MOVE_NAME[moveAnim]}）` : shortLine(state));
@@ -1239,10 +1307,39 @@ app.addEventListener("click", (ev) => {
   }
 });
 
+/** Tap outside a dialog closes it; Esc closes the top one; Enter/Space work on everything that acts like a button. */
+function clickAct(act: string) {
+  const b = document.createElement("button");
+  b.dataset.act = act;
+  b.hidden = true;
+  app.appendChild(b);
+  b.click();
+  b.remove();
+}
+app.addEventListener("click", (ev) => {
+  const bg = ev.target as HTMLElement;
+  if (bg.classList.contains("modal-bg") && !bg.hasAttribute("data-leaving") && bg.dataset.close) clickAct(bg.dataset.close);
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") {
+    const dialogs = app.querySelectorAll<HTMLElement>(".modal-bg[data-close]:not([data-leaving])");
+    const top = dialogs[dialogs.length - 1];
+    if (top) { ev.preventDefault(); clickAct(top.dataset.close!); }
+    return;
+  }
+  const el = ev.target as HTMLElement;
+  if ((ev.key === "Enter" || ev.key === " ") && el.getAttribute("role") === "button" && el.dataset.act) {
+    ev.preventDefault();
+    el.click();
+  }
+});
+
 function animateGauge() {
   const mark = app.querySelector<HTMLElement>(".gauge-mark");
   if (!charging || !mark) return;
-  mark.style.left = `calc(${(chargePos(performance.now() - charging.start) * 100).toFixed(1)}% - 3px)`;
+  // transform, not left: moves on the compositor, no layout every frame
+  const w = mark.parentElement!.clientWidth - mark.offsetWidth;
+  mark.style.transform = `translateX(${(chargePos(performance.now() - charging.start) * w).toFixed(1)}px)`;
   requestAnimationFrame(animateGauge);
 }
 
@@ -1255,9 +1352,7 @@ app.addEventListener("wheel", (ev) => {
   crownAt = performance.now();
   const i = WATCH_PAGES.indexOf(watchPage) + (ev.deltaY > 0 ? 1 : -1);
   if (i < 0 || i >= WATCH_PAGES.length) return;
-  watchPage = WATCH_PAGES[i]!;
-  watchResult = null;
-  render();
+  goPage(WATCH_PAGES[i]!);
 }, { passive: false });
 
 app.addEventListener("input", (ev) => {
@@ -1304,6 +1399,7 @@ setInterval(() => {
   drawAll();
 }, 500);
 
+setMorphReducedMotion(reduceMotion);
 applyReduceMotion();
 matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => { applyReduceMotion(); render(); });
 render();
