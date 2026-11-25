@@ -160,6 +160,14 @@ section { position: relative; }
 .watch-time { right: 11%; font-variant-numeric: tabular-nums; }
 .watch .pet { width: 58%; }
 
+/* Every pet is alive: it breathes (a slow squash from its feet), blinks at its own moment, and its eyes
+   follow a pointer (site.ts sets --lx/--ly from -1 to 1; the transition smooths the jumps). */
+.pet-breathe { transform-box: fill-box; transform-origin: 50% 100%; animation: breathe 3.6s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.025, .976); } }
+.pet-eyes { transform-box: fill-box; transform-origin: 50% 60%; animation: blink 5.2s var(--blink-delay, 0s) infinite; }
+@keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 95.5% { transform: scaleY(.08); } }
+.pet-look { transform: translate(calc(var(--lx, 0) * 3.2px), calc(var(--ly, 0) * 2.6px)); transition: transform 420ms var(--ease); }
+
 /* ───────────── 1. film ─────────────
    One object all the way through. Every value below is driven by a scroll variable (0 → 1) from site.ts,
    and only opacity, transform and stroke offsets move, so scrolling never re-lays-out the page.
@@ -196,7 +204,7 @@ section { position: relative; }
   opacity: calc(var(--a, 0) - var(--b, 0)); transform: translate(-50%, calc((1 - var(--a, 0)) * 14px - var(--b, 0) * 14px)); pointer-events: none; }
 
 /* the line splits into the four lines of a day, then the four draw back together into the egg */
-.rows { --rs: clamp(58px, 10vh, 90px); position: absolute; top: var(--ly); left: 50%; width: min(1040px, 100% - 48px); transform: translate(-50%, -50%);
+.rows { --rs: clamp(62px, 11.5vh, 104px); position: absolute; top: var(--ly); left: 50%; width: min(1040px, 100% - 48px); transform: translate(-50%, -50%);
   opacity: calc(1 - var(--conv, 0)); pointer-events: none; }
 .row { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); align-items: center; gap: 20px; height: var(--rs);
   transform: translateY(calc((1.5 - var(--n)) * var(--rs) * (1 - var(--split, 0) + var(--conv, 0)))); }
@@ -204,13 +212,50 @@ section { position: relative; }
 .row-label { display: grid; line-height: 1.3; opacity: calc(var(--lab, 0) - 2 * var(--conv, 0)); transform: translateX(calc((1 - var(--lab, 0)) * -10px)); }
 .row-label span { font-size: 13px; color: var(--on-night-muted); }
 .row-label b { font-size: clamp(15px, 1.5vw, 18px); color: var(--c); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.row-line { position: relative; height: 100%; transform: scaleX(calc(1 - .55 * var(--conv, 0))); }
-.row-line svg { width: 100%; height: 100%; overflow: visible; }
-.row-line path { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke;
-  stroke-dasharray: 100; stroke-dashoffset: calc(100 - 100 * var(--draw, 0)); }
-.row-tag { position: absolute; top: 4%; padding: 2px 9px; border-radius: 999px; font-size: 12px; line-height: 1.5; white-space: nowrap; color: var(--on-night);
-  background: rgba(255, 255, 255, .09); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
-  opacity: calc(var(--lab, 0) - 2 * var(--conv, 0)); transform: translate(-50%, calc((1 - var(--lab, 0)) * 6px)); }
+/* Each lane is yesterday on one shared clock, drawn the way the Health app draws it. The day sweeps in from
+   the left (clip-path), so every lane reads as time passing; bars also grow up from their baseline. */
+.lane { position: relative; height: 100%; padding-top: 20px; transform: scaleX(calc(1 - .55 * var(--conv, 0)));
+  clip-path: inset(-30px calc((1 - var(--draw, 0)) * (100% + 80px) - 80px) -4px -80px); }
+.lane-data { position: relative; height: 100%; border-bottom: 1px solid rgba(255, 255, 255, .1);
+  /* hairlines at 06:00, 12:00 and 18:00 */
+  background: linear-gradient(to right, transparent calc(25% - .5px), rgba(255, 255, 255, .06) 0 calc(25% + .5px), transparent 0 calc(50% - .5px),
+    rgba(255, 255, 255, .06) 0 calc(50% + .5px), transparent 0 calc(75% - .5px), rgba(255, 255, 255, .06) 0 calc(75% + .5px), transparent 0); }
+.lane-data > i, .lane-data > svg { position: absolute; }
+.lane-data > svg { inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+/* steps: one bar an hour */
+.bars { position: absolute; inset: 0; display: flex; align-items: flex-end; }
+.bars i { flex: 1; height: calc(var(--h) * 100%); display: flex; justify-content: center; }
+.bars i::before { content: ""; width: 58%; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--c); transform-origin: bottom;
+  transform: scaleY(clamp(0, var(--draw, 0) * 1.6 - var(--k) / 24 * .6, 1)); }
+.bars i[style*="--h:0.000"]::before { display: none; }
+
+/* sleep: Awake on top, then REM, Core, Deep */
+.seg { top: calc(var(--lv) * 25% + 4%); height: 17%; border-radius: 3px; min-width: 2px; }
+.seg-awake { background: #ff9f85; } .seg-rem { background: #9fd8ff; } .seg-core { background: #5f9df7; } .seg-deep { background: #6a63e6; }
+
+/* heart rate all day, the run picked out */
+.hr, .hr-run { fill: none; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.hr { stroke: color-mix(in srgb, var(--c) 45%, transparent); stroke-width: 1.4; }
+.hr-run { stroke: var(--c); stroke-width: 2.2; }
+
+/* HRV: readings against your usual range */
+.usual { left: 0; right: 0; border-radius: 4px; background: color-mix(in srgb, var(--c) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 22%, transparent); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--night); }
+
+/* notes sit in the strip above the lane, pointing down at the moment they describe */
+.row-tag { position: absolute; top: 0; padding-bottom: 6px; font-size: 12px; line-height: 1.2; white-space: nowrap; color: var(--on-night-muted);
+  opacity: calc(var(--lab, 0) - 2 * var(--conv, 0)); transform: translate(-50%, calc((1 - var(--lab, 0)) * 4px)); }
+.row-tag::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 1px; height: 5px; background: currentColor; opacity: .6; }
+.row-tag.end { transform: translate(-100%, calc((1 - var(--lab, 0)) * 4px)); }
+.row-tag.end::after { left: auto; right: 0; }
+
+/* the shared clock under the four lanes */
+.row-axis { --n: 4; height: 26px; align-items: start; opacity: calc(var(--split, 0) - 2 * var(--conv, 0)); }
+.axis { position: relative; height: 100%; font-size: 11px; color: var(--on-night-muted); font-variant-numeric: tabular-nums; }
+.axis span { position: absolute; top: 6px; transform: translateX(-50%); }
+.axis span:nth-child(1) { left: 0; transform: none; } .axis span:nth-child(2) { left: 25%; } .axis span:nth-child(3) { left: 50%; } .axis span:nth-child(4) { left: 75%; }
+.axis span:nth-child(5) { left: 100%; transform: translateX(-100%); }
 
 /* egg → light → pet → the pet hops up to make room for the promise → the watch appears around it, already in place.
    The watch only fades in: Apple's product image may not be scaled or moved by an animation (see Watch.astro). */
@@ -342,6 +387,7 @@ section { position: relative; }
 .titles span { display: block; margin-top: 6px; font-family: var(--serif); font-size: 19px; color: var(--ink); text-wrap: balance; }
 .forms-wrap { position: relative; }
 .forms { container-type: inline-size; }
+.form-egg, .form-flash { display: none; }
 .mirror-egg { display: none; }
 
 /* Where the whole grid fits on one screen, it is told: one egg in the middle, four lives fan out from under it,
@@ -355,8 +401,15 @@ section { position: relative; }
   .mirror-egg .pet { width: 100%; animation: wobble 2.4s var(--ease) infinite; transform-origin: 50% 90%; }
   html.js .mirror .form[data-reveal] { transition: none; opacity: var(--fan, 0);
     transform: translateX(calc((1.5 - var(--i)) * (100cqw + 16px) / 4 * (1 - var(--fan, 0)))) rotate(calc((var(--i) - 1.5) * 8deg * (1 - var(--fan, 0)))) scale(calc(.7 + .3 * var(--fan, 0))); }
-  .mirror .form-pet { opacity: var(--grow, 0); transform: scale(calc(.4 + .6 * var(--grow, 0))); }
-  .mirror .form b, .mirror .form .muted { opacity: var(--grow, 0); }
+  /* each card carries its own egg out of the middle; it wobbles, swells, bursts in light, and the form it grew into is there */
+  .mirror .form-egg { display: block; position: absolute; inset: 12px; opacity: clamp(0, (.5 - var(--grow, 0)) * 8, 1);
+    transform: scale(calc(1 + .16 * clamp(0, var(--grow, 0) * 2.2, 1))); }
+  .mirror .form-egg .pet { animation: wobble 1.5s var(--ease) infinite; transform-origin: 50% 90%; }
+  .mirror .form-flash { display: block; position: absolute; inset: -40%; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(255, 251, 236, .98) 22%, rgba(110, 231, 160, .45) 52%, rgba(110, 231, 160, 0));
+    opacity: min(clamp(0, (var(--grow, 0) - .4) * 8, 1), clamp(0, (.72 - var(--grow, 0)) * 6, 1)); transform: scale(calc(.5 + .7 * var(--grow, 0))); }
+  .mirror .form-grown { opacity: clamp(0, (var(--grow, 0) - .5) * 5, 1); transform: scale(calc(.55 + .45 * clamp(0, (var(--grow, 0) - .5) * 2.6, 1))); }
+  .mirror .form b, .mirror .form .muted { opacity: clamp(0, (var(--grow, 0) - .62) * 3, 1); }
   html.js .mirror .titles[data-reveal] { transition: none; opacity: var(--tl, 0); transform: translateY(calc((1 - var(--tl, 0)) * 12px)); }
 }
 @keyframes wobble { 0%, 70%, 100% { transform: rotate(0); } 76% { transform: rotate(-5deg); } 82% { transform: rotate(4deg); } 88% { transform: rotate(-2deg); } }
@@ -406,7 +459,9 @@ section { position: relative; }
 .sum-tag { flex: none; padding: 2px 9px; border-radius: 999px; background: var(--grow); color: #06301a; font-size: 12px; font-weight: 700; }
 .ledger-n { grid-row: 2; grid-column: 1; align-self: center; display: flex; align-items: baseline; gap: 10px; margin: 0; font-family: var(--serif); font-size: 26px;
   opacity: var(--n, 0); transform: translateY(calc(var(--rh) * 2 + 12px + (1 - var(--n, 0)) * 12px)); }
-.ledger-n .num { font-size: clamp(64px, 7vw, 104px); line-height: .9; }
+.ledger-unit { opacity: var(--u, 1); }
+.ledger-unit small { margin-left: 10px; }
+.ledger-n .num { font-variant-numeric: tabular-nums;  font-size: clamp(64px, 7vw, 104px); line-height: .9; }
 .ledger-n small { font-family: var(--font); font-size: 14px; color: var(--muted); }
 .privacy-checks { padding: 0 0 clamp(80px, 12vh, 140px); }
 .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px 48px; padding-top: 28px; border-top: 1px solid var(--line); }
@@ -477,7 +532,8 @@ html.js [data-reveal].in { opacity: 1; transform: none; }
   .rows { --rs: clamp(56px, 9vh, 76px); width: calc(100% - 32px); }
   .row { grid-template-columns: 6em minmax(0, 1fr); gap: 10px; }
   .row-label b { font-size: 13px; white-space: normal; }
-  .row-tag { font-size: 11px; padding: 1px 7px; }
+  .row-tag { font-size: 11px; }
+  .axis span:nth-child(even) { display: none; }
   .row-tag + .row-tag { display: none; } /* one note per line fits a phone */
   .hatch { --hs: clamp(160px, min(44vw, 28vh), 230px); --lift-y: -27vh; }
   .day-inner { grid-template-columns: 1fr; grid-template-rows: auto auto; align-content: center; gap: 22px; padding-top: 60px; }
@@ -532,6 +588,8 @@ html.js [data-reveal].in { opacity: 1; transform: none; }
   .mirror .stage, .privacy .stage { position: static; height: auto; }
   .privacy .stage { padding: clamp(96px, 14vh, 160px) 0 40px; }
   .raw { display: none; }
+  .form-egg, .form-flash { display: none !important; }
+  .mirror .form-grown, .mirror .form b, .mirror .form .muted, .ledger-unit { opacity: 1; transform: none; }
   .ledger-n { grid-row: 3; margin-top: 14px; transform: none; }
   .ledger-head span:last-child { transform: none; }
   .band img { transform: none; }

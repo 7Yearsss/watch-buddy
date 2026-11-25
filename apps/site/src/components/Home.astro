@@ -8,6 +8,7 @@ import Pet from "./Pet.astro";
 import Watch from "./Watch.astro";
 import Icon from "./Icon.astro";
 import { PHOTOS, src, srcset } from "../data/photos";
+import { STEPS, SLEEP, HR_LINE, HR_RUN, HR_RUN_AREA, HRV, HRV_USUAL, hrvTop, TAG_AT } from "../data/day";
 import { DICTS, LANGS, PATHS, HREFLANG, langOf } from "../i18n";
 
 const lang = langOf(Astro.currentLocale);
@@ -24,17 +25,11 @@ const path = (fn: (t: number) => number, n = 320) =>
 const h = (hh: number) => hh / 24;
 
 const mainline = path((t) => 50 + ecg(t, [0.14, 0.38, 0.62, 0.86], 1.2), 420);
-const rowArt = [
-  { color: "#7ee0a2", at: [h(12.6), h(18.4)],
-    d: path((t) => 66 - 22 * g(t, h(8.2), 0.025) - 34 * g(t, h(12.6), 0.035) - 28 * g(t, h(18.4), 0.03) - 3 * Math.sin(t * 90) * smooth(h(7), h(8), t) * (1 - smooth(h(22), h(23), t))) },
-  { color: "#8db8ff", at: [h(7.2), h(23.6)],
-    d: path((t) => 34 + 34 * (1 - smooth(h(6.9), h(7.4), t)) + 34 * smooth(h(23.4), h(23.9), t) - 4 * Math.sin(t * 160) * (1 - smooth(h(6.9), h(7.4), t))) },
-  { color: "#ff9a62", at: [h(19.3)],
-    d: path((t) => 70 - 10 * g(t, h(12.6), 0.02) - 52 * g(t, h(19.3), 0.016) - 2 * Math.sin(t * 120)) },
-  { color: "#ff86ad", at: [0.5],
-    d: path((t) => 54 + ecg(t, [0.2, 0.5, 0.8]), 420) },
-];
-const rows = rowArt.map((r, i) => ({ ...r, ...t.film.rows[i]!, tags: r.at.map((at, k) => ({ at, text: t.film.rows[i]!.tags[k]! })) }));
+// the four lanes of yesterday, drawn the way the Health app draws them (data: src/data/day.ts)
+const ROW_COLORS = ["#7ee0a2", "#8db8ff", "#ff9a62", "#ff86ad"];
+const rows = ROW_COLORS.map((color, i) => ({ color, ...t.film.rows[i]!, tags: TAG_AT[i]!.map((at, k) => ({ at, text: t.film.rows[i]!.tags[k]! })) }));
+const stepMax = Math.max(...STEPS);
+const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
 const egg = "M100 18 C142 18 170 92 170 142 C170 194 138 224 100 224 C62 224 30 194 30 142 C30 92 58 18 100 18 Z";
 
 const dayPhotos = [PHOTOS.morning, PHOTOS.walk, PHOTOS.run, PHOTOS.sleep, PHOTOS.cycle];
@@ -146,14 +141,34 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
 
         <div class="rows" data-scrub="split:0.14,0.24;conv:0.36,0.47" aria-hidden="true">
           {rows.map((r, i) => (
-            <div class={`row row-${i}`} style={`--c:${r.color}`} data-scrub={`draw:${0.16 + i * 0.025},${0.25 + i * 0.025};lab:${0.2 + i * 0.02},${0.26 + i * 0.02}`}>
+            <div class={`row row-${i}`} style={`--c:${r.color}`} data-scrub={`draw:${0.16 + i * 0.025},${0.27 + i * 0.025};lab:${0.2 + i * 0.02},${0.26 + i * 0.02}`}>
               <div class="row-label"><span>{r.label}</span><b>{r.value}</b></div>
-              <div class="row-line">
-                <svg viewBox="0 0 1000 100" preserveAspectRatio="none"><path d={r.d} pathLength="100" /></svg>
-                {r.tags.map((tag) => <span class="row-tag" style={`left:${(tag.at * 100).toFixed(1)}%`}>{tag.text}</span>)}
+              <div class="lane">
+                <div class="lane-data">
+                  {i === 0 && (
+                    <div class="bars">{STEPS.map((v, k) => <i style={`--h:${(v / stepMax).toFixed(3)};--k:${k}`}></i>)}</div>
+                  )}
+                  {i === 1 && SLEEP.map((s) => <i class={`seg seg-${s.stage}`} style={`left:${pct(s.x)};width:${pct(s.w)};--lv:${s.level}`}></i>)}
+                  {i === 2 && (
+                    <svg viewBox="0 0 1000 100" preserveAspectRatio="none">
+                      <defs><linearGradient id="runFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a62" stop-opacity=".45" /><stop offset="1" stop-color="#ff9a62" stop-opacity="0" /></linearGradient></defs>
+                      <path class="hr" d={HR_LINE} />
+                      <path class="hr-area" d={HR_RUN_AREA} fill="url(#runFill)" />
+                      <path class="hr-run" d={HR_RUN} />
+                    </svg>
+                  )}
+                  {i === 3 && (
+                    <>
+                      <i class="usual" style={`top:${hrvTop(HRV_USUAL.hi).toFixed(1)}%;bottom:${(100 - hrvTop(HRV_USUAL.lo)).toFixed(1)}%`}></i>
+                      {HRV.map((d) => <i class="dot" style={`left:${pct(d.x)};top:${hrvTop(d.ms).toFixed(1)}%`}></i>)}
+                    </>
+                  )}
+                </div>
+                {r.tags.map((tag) => <span class={`row-tag${tag.at > 0.9 ? " end" : ""}`} style={`left:${pct(tag.at)}`}>{tag.text}</span>)}
               </div>
             </div>
           ))}
+          <div class="row row-axis"><span></span><div class="axis">{["00:00", "06:00", "12:00", "18:00", "24:00"].map((x) => <span>{x}</span>)}</div></div>
         </div>
 
         <div class="hatch" data-scrub="egg:0.38,0.5;fill:0.49,0.56;fi:0.555,0.575;fo:0.575,0.64;pet:0.56,0.64;lift:0.64,0.72;land:0.72,0.8">
@@ -270,15 +285,15 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
           <p class="lede">{t.mirror.lede}</p>
         </div>
         <div class="forms-wrap">
-        <div class="mirror-egg" data-scrub="egg:0.46,0.6" aria-hidden="true"><Pet kind="egg" /></div>
+        <div class="mirror-egg" data-scrub="egg:0.3,0.46" aria-hidden="true"><Pet kind="egg" /></div>
         <ul class="forms">
           {forms.map((f, i) => (
-            <li class="form" data-reveal style={`--d:${i * 90}ms;--i:${i}`} data-scrub={`fan:${(0.06 + i * 0.05).toFixed(2)},${(0.34 + i * 0.05).toFixed(2)};grow:${(0.5 + i * 0.04).toFixed(2)},${(0.64 + i * 0.04).toFixed(2)}`}>
+            <li class="form" data-reveal style={`--d:${i * 90}ms;--i:${i}`} data-scrub={`fan:${(0.06 + i * 0.05).toFixed(2)},${(0.34 + i * 0.05).toFixed(2)};grow:${(0.44 + i * 0.05).toFixed(2)},${(0.66 + i * 0.05).toFixed(2)}`}>
               <div class="form-photo">
                 <img src={src(f.photo)} srcset={srcset(f.photo)} sizes="(max-width: 760px) 90vw, 25vw" alt={t.alts[f.photo.file]} loading="lazy" decoding="async" />
                 <span class="form-life">{f.life}</span>
               </div>
-              <div class="form-pet"><Pet kind={f.kind} /></div>
+              <div class="form-pet"><span class="form-egg" aria-hidden="true"><Pet kind="egg" /></span><i class="form-flash" aria-hidden="true"></i><Pet kind={f.kind} class="form-grown" /></div>
               <b>{f.name}</b>
               <span class="muted">{f.look}</span>
             </li>
@@ -352,7 +367,7 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
             ))}
           </ol>
           <p class="sum" data-scrub="s:0.54,0.64"><span class="sum-tag">{t.privacy.uploadTag}</span><span>{t.privacy.upload}</span></p>
-          <p class="ledger-n" data-scrub="n:0.64,0.74"><span class="num">1</span>{t.privacy.unit}<small>{t.privacy.unitNote}</small></p>
+          <p class="ledger-n" data-scrub="n:0.5,0.58"><span class="num" data-count="19819" data-scrub="cnt:0.5,0.68">1</span><span class="ledger-unit" data-scrub="u:0.66,0.74">{t.privacy.unit}<small>{t.privacy.unitNote}</small></span></p>
         </figure>
       </div>
     </section>

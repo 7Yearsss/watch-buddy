@@ -50,9 +50,21 @@ function applyTracks(tracks: Track[], p: number) {
   for (const t of tracks) {
     for (const v of t.vars) {
       const x = Math.round(clamp((p - v.a) / (v.b - v.a)) * 1000) / 1000;
-      if (x !== v.last) { v.last = x; t.el.style.setProperty(`--${v.name}`, String(x)); }
+      if (x !== v.last) {
+        v.last = x;
+        t.el.style.setProperty(`--${v.name}`, String(x));
+        if (v.name === "cnt") count(t.el, x);
+      }
     }
   }
+}
+
+/** `data-count="N"` with a `cnt` track: the number falls from N to 1 as cnt goes 0 → 1, evenly through the
+ *  orders of magnitude (19,819 → 1,000 → 100 → 10 → 1), so you can read it the whole way down. */
+const numberFormat = new Intl.NumberFormat(document.documentElement.lang);
+function count(el: HTMLElement, x: number) {
+  const from = Number(el.dataset.count);
+  el.textContent = numberFormat.format(Math.max(1, Math.round(Math.exp((1 - x) * Math.log(from)))));
 }
 
 /** `[data-view]`: scrubbed by its own pass through the viewport rather than by a pinned scene. Not used inside a scene. */
@@ -286,3 +298,42 @@ form?.addEventListener("submit", async (ev) => {
     btn.textContent = T.join;
   }
 });
+
+// ───── pets that notice you ─────
+// They breathe and blink on their own (CSS). Their eyes follow a mouse or pen; with no pointer around
+// (phones, or a mouse left still) they glance about now and then. Reduce Motion: eyes stay put.
+const lookers = [...document.querySelectorAll<SVGGElement>(".pet-look")].map((g) => g.ownerSVGElement!).filter(Boolean);
+const inView = new Set<Element>();
+const lookIO = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) inView.add(e.target); else inView.delete(e.target);
+});
+lookers.forEach((svg) => lookIO.observe(svg));
+let pointerX = 0, pointerY = 0, lastPointer = -Infinity, lookQueued = false;
+function setLook(svg: SVGSVGElement, x: number, y: number) {
+  svg.style.setProperty("--lx", x.toFixed(2));
+  svg.style.setProperty("--ly", y.toFixed(2));
+}
+function lookAtPointer() {
+  lookQueued = false;
+  for (const svg of lookers) {
+    if (!inView.has(svg)) continue;
+    const r = svg.getBoundingClientRect();
+    const dx = pointerX - (r.left + r.width / 2), dy = pointerY - (r.top + r.height * 0.62); // the eyes sit low in the body
+    const d = Math.hypot(dx, dy) || 1;
+    const k = Math.min(1, d / 240); // close by, it looks only a little off centre
+    setLook(svg, (dx / d) * k, (dy / d) * k);
+  }
+}
+addEventListener("pointermove", (e) => {
+  if (e.pointerType === "touch" || reduce.matches) return;
+  pointerX = e.clientX; pointerY = e.clientY; lastPointer = performance.now();
+  if (!lookQueued) { lookQueued = true; requestAnimationFrame(lookAtPointer); }
+}, { passive: true });
+setInterval(() => {
+  if (reduce.matches || document.hidden || performance.now() - lastPointer < 4000) return;
+  for (const svg of lookers) {
+    if (!inView.has(svg)) continue;
+    if (Math.random() < 0.45) setLook(svg, Math.random() * 1.6 - 0.8, Math.random() * 0.9 - 0.45);
+    else setLook(svg, 0, 0);
+  }
+}, 2400);
