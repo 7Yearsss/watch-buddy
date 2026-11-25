@@ -10,21 +10,19 @@ import Icon from "./Icon.astro";
 import { PHOTOS, src, srcset } from "../data/photos";
 import { STEPS, SLEEP, HR_LINE, HR_RUN, HR_RUN_AREA, HRV, HRV_USUAL, hrvTop, TAG_AT } from "../data/day";
 import { DICTS, LANGS, PATHS, HREFLANG, langOf } from "../i18n";
+import { heartbeat } from "../data/heartbeat";
 
 const lang = langOf(Astro.currentLocale);
 const t = DICTS[lang];
 const abs = (p: string) => (Astro.site ? new URL(p, Astro.site).href : null);
 
 // ── the four lines of a day (viewBox 0 0 1000 100, x = time of day) ──
-const g = (x: number, c: number, w: number) => Math.exp(-((x - c) ** 2) / (2 * w * w));
-const ecg = (x: number, beats: number[], k = 1) =>
-  beats.reduce((y, c) => y - 34 * k * g(x, c, 0.0045) + 12 * k * g(x, c + 0.011, 0.005) - 5 * k * g(x, c - 0.03, 0.009) - 7 * k * g(x, c + 0.05, 0.014), 0);
 const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const path = (fn: (t: number) => number, n = 320) =>
   Array.from({ length: n + 1 }, (_, i) => `${i ? "L" : "M"}${((i / n) * 1000).toFixed(1)} ${fn(i / n).toFixed(1)}`).join("");
 const h = (hh: number) => hh / 24;
 
-const mainline = path((t) => 50 + ecg(t, [0.14, 0.38, 0.62, 0.86], 1.2), 420);
+const mainline = path(heartbeat, 420);
 // the four lanes of yesterday, drawn the way the Health app draws them (data: src/data/day.ts)
 const ROW_COLORS = ["#7ee0a2", "#8db8ff", "#ff9a62", "#ff86ad"];
 const rows = ROW_COLORS.map((color, i) => ({ color, ...t.film.rows[i]!, tags: TAG_AT[i]!.map((at, k) => ({ at, text: t.film.rows[i]!.tags[k]! })) }));
@@ -135,7 +133,7 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
     -->
     <section class="film" id="top" data-scene data-tone="dark" aria-label={t.film.label}>
       <div class="stage" data-scrub="card:0.9,1">
-        <canvas class="pulse" data-pulse data-scrub="cout:0.11,0.16" aria-hidden="true"></canvas>
+        <canvas class="pulse" data-pulse data-scrub="cout:0.11,0.14" aria-hidden="true"></canvas>
 
         <div class="film-intro" data-scrub="out:0.03,0.1">
           <h1 class="hero-title" set:html={t.film.h1} />
@@ -146,16 +144,16 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
           </div>
         </div>
 
-        <div class="mainline" data-scrub="a:0.08,0.13;b:0.2,0.26" aria-hidden="true">
+        <div class="mainline" data-mainline data-scrub="a:0.09,0.13;f:0.145,0.19;b:0.19,0.215" aria-hidden="true">
           <svg viewBox="0 0 1000 100" preserveAspectRatio="none"><path d={mainline} /></svg>
         </div>
 
         <p class="cap cap-1" data-scrub="a:0.17,0.22;b:0.32,0.36" set:html={t.film.cap1} />
         <p class="cap cap-2" data-scrub="a:0.38,0.42;b:0.54,0.58" set:html={t.film.cap2} />
 
-        <div class="rows" data-scrub="split:0.14,0.24;conv:0.36,0.47" aria-hidden="true">
+        <div class="rows" data-scrub="split:0.175,0.235;conv:0.345,0.375;wind:0.375,0.47" aria-hidden="true">
           {rows.map((r, i) => (
-            <div class={`row row-${i}`} style={`--c:${r.color}`} data-scrub={`draw:${0.16 + i * 0.025},${0.27 + i * 0.025};lab:${0.2 + i * 0.02},${0.26 + i * 0.02}`}>
+            <div class={`row row-${i}`} style={`--c:${r.color}`} data-scrub={`draw:${0.215 + i * 0.02},${0.29 + i * 0.02};lab:${0.235 + i * 0.02},${0.28 + i * 0.02}`}>
               <div class="row-label"><span>{r.label}</span><b>{r.value}</b></div>
               <div class="lane">
                 <div class="lane-data">
@@ -185,7 +183,9 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
           <div class="row row-axis"><span></span><div class="axis">{["00:00", "06:00", "12:00", "18:00", "24:00"].map((x) => <span>{x}</span>)}</div></div>
         </div>
 
-        <div class="hatch" data-scrub="egg:0.38,0.5;fill:0.49,0.56;fi:0.555,0.575;fo:0.575,0.64;pet:0.56,0.64;lift:0.64,0.72;land:0.72,0.8">
+        <svg class="wind" data-wind data-scrub="wind:0.375,0.47;arc:0.468,0.476" aria-hidden="true">{rows.map((r) => <path stroke={r.color} />)}</svg>
+
+        <div class="hatch" data-scrub="egg:0.4,0.48;arc:0.468,0.476;fill:0.49,0.56;fi:0.555,0.575;fo:0.575,0.64;pet:0.56,0.64;lift:0.64,0.72;land:0.72,0.8">
           <div class="glow" aria-hidden="true"></div>
           <Watch class="bezel" time={t.film.watchTime} />
           <svg class="egg" viewBox="0 0 200 240" aria-hidden="true">
@@ -466,14 +466,16 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
 
     <!-- 9. FAQ. -->
     <section class="faq" id="faq" aria-labelledby="faq-title">
-      <div class="wrap narrow">
+      <div class="wrap faq-grid">
         <h2 id="faq-title" class="h2" data-reveal>{t.faq.h2}</h2>
-        {t.faq.items.map((f) => (
-          <details data-reveal>
-            <summary>{f.q}<Icon name="plus" /></summary>
-            <p>{f.a}</p>
-          </details>
-        ))}
+        <div class="faq-list">
+          {t.faq.items.map((f, i) => (
+            <details data-reveal style={`--d:${i * 50}ms`}>
+              <summary>{f.q}<Icon name="plus" /></summary>
+              <p>{f.a}</p>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
 
@@ -494,9 +496,19 @@ const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }
   </main>
 
   <footer class="foot">
-    <div class="wrap foot-row">
-      <span>© 2026 Pulseling · {t.foot.tagline}</span>
-      <span class="muted small">{t.foot.photos}{Object.values(PHOTOS).map((p) => p.author).join(t.foot.sep)}</span>
+    <div class="wrap">
+      <div class="foot-top">
+        <a class="brand" href="#top" aria-label={t.ui.home}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6" /></svg>Pulseling</a>
+        <nav class="foot-links" aria-label="Pulseling">
+          <a href="#faq">{t.ui.faq}</a>
+          <a href="#privacy">{t.ui.privacy}</a>
+          <a href="#join">{t.ui.join}</a>
+        </nav>
+      </div>
+      <div class="foot-row">
+        <span>© 2026 Pulseling · {t.foot.tagline}</span>
+        <span>{t.foot.photos}{Object.values(PHOTOS).map((p) => p.author).join(t.foot.sep)}</span>
+      </div>
     </div>
   </footer>
 

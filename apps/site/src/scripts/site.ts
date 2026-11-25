@@ -13,6 +13,8 @@
  * Words: the page puts its language's strings in <script id="i18n" type="application/json"> (src/i18n, `client`).
  */
 
+import { heartbeat, LINE_BOX } from "../data/heartbeat";
+
 const reduce = matchMedia("(prefers-reduced-motion: reduce)");
 const clamp = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 document.documentElement.classList.add("js");
@@ -176,6 +178,9 @@ class Pulse {
     });
     pts.sort((p, q) => p.b - q.b); // grouped by brightness, so each group is one path and one fill
     this.pts = pts;
+    // where each grain lands: the very heartbeat the SVG line draws, in this canvas's pixels (finely sampled for the spikes)
+    const cy = this.h * this.ly, box = this.h * LINE_BOX;
+    for (let i = 0; i <= Pulse.LINE_RES; i++) this.lineT[i] = cy + ((heartbeat(i / Pulse.LINE_RES) - 50) / 100) * box;
     this.draw((performance.now() - this.t0) / 1000);
   }
   private kick() {
@@ -184,29 +189,18 @@ class Pulse {
     const loop = (now: number) => { this.draw((now - this.t0) / 1000); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
   }
-  /** A heartbeat drifting slowly to the left; the same shape the line underneath ends on. */
-  private wave(x: number, t: number) {
-    let y = 0.22 * Math.sin(x * 7 + t * 0.5) + 0.12 * Math.sin(x * 17 - t * 0.8);
-    for (let k = 0; k < 4; k++) {
-      const c = (k / 4 + 0.14 - t * 0.02 + 10) % 1;
-      const d = x - c;
-      y += -1.5 * Math.exp(-(d * d) / 0.00005) + 0.55 * Math.exp(-((d - 0.011) ** 2) / 0.00006);
-    }
-    return y;
-  }
   // per-frame shape of the band, sampled in columns, so each grain only looks it up
   private static COLS = 480;
   private bandT = new Float32Array(Pulse.COLS + 1);
   private widthT = new Float32Array(Pulse.COLS + 1);
   private strandT = [new Float32Array(Pulse.COLS + 1), new Float32Array(Pulse.COLS + 1), new Float32Array(Pulse.COLS + 1)];
-  private lineT = new Float32Array(Pulse.COLS + 1);
+  private static LINE_RES = 2400;
+  private lineT = new Float32Array(Pulse.LINE_RES + 1);
   private draw(t: number) {
     const { ctx, w, h } = this;
     ctx.clearRect(0, 0, w, h);
     const g = this.gather;
     const e = g * g * (3 - 2 * g); // ease the settle
-    const cy = h * this.ly;
-    const amp = h * 0.085;
     const COLS = Pulse.COLS;
     for (let c = 0; c <= COLS; c++) {
       const X = c / COLS;
@@ -216,7 +210,6 @@ class Pulse {
       const width = h * (0.05 + 0.09 * (0.5 + 0.5 * Math.sin(X * 6.3 + t * 0.07 + 1.3))) * (0.75 + 0.25 * Math.sin(X * 2.7 - t * 0.05));
       this.widthT[c] = width;
       for (let k = 0; k < 3; k++) this.strandT[k]![c] = (k - 1) * width * 0.9 * Math.sin(X * (3.1 + k) + t * (0.09 + 0.03 * k) + k * 2.1);
-      if (e > 0) this.lineT[c] = cy + this.wave(X, t) * amp;
     }
     // the pointer's push fades in when it moves and out when it rests, so the dust never jumps
     this.stirTarget = performance.now() - this.lastMove < 1200 ? 1 : 0;
@@ -225,7 +218,10 @@ class Pulse {
     const R = Math.max(120, Math.min(w, h) * 0.2), R2 = R * R;
     const breathe = 0.12 * Math.sin(t * 0.6);
     const alphas = [0.2, 0.45, 0.85];
-    ctx.fillStyle = "#f1f2ee";
+    // the dust takes on the line's green as it lands, so the hand-over is a change of brightness, not of colour
+    const mixC = (a: number, b: number) => Math.round(a + (b - a) * e);
+    ctx.fillStyle = `rgb(${mixC(241, 110)}, ${mixC(242, 231)}, ${mixC(238, 160)})`;
+    const LR = Pulse.LINE_RES;
     let bucket = -1;
     for (const p of this.pts) {
       if (p.b !== bucket) {
@@ -236,7 +232,12 @@ class Pulse {
       const c = (X * COLS) | 0;
       let px = X * w;
       const restY = p.star ? p.sy * h : this.bandT[c]! + this.strandT[p.k]![c]! + p.off * this.widthT[c]! * (p.b === 0 ? 2.4 : 0.55) * (1 + breathe);
-      let py = e > 0 ? restY + (this.lineT[c]! + p.off * h * 0.003 - restY) * e : restY;
+      let py = restY;
+      if (e > 0) {
+        const li = X * LR, i0 = li | 0, f = li - i0;
+        const lineY = this.lineT[i0]! + (this.lineT[Math.min(LR, i0 + 1)]! - this.lineT[i0]!) * f;
+        py = restY + (lineY + p.off * 1.2 - restY) * e;
+      }
       if (stir > 0.01) {
         const dx = px - this.px, dy = py - this.py, d2 = dx * dx + dy * dy;
         if (d2 < R2) {
@@ -250,18 +251,116 @@ class Pulse {
     ctx.globalAlpha = 1;
   }
 }
+// The heartbeat line calms into the span the four lanes will take, so it can split straight into them.
+// Measured, not guessed: the lanes' width depends on the screen and the label column.
+const mainlineEl = document.querySelector<HTMLElement>("[data-mainline]");
+const firstLane = document.querySelector<HTMLElement>(".row-0 .lane-data");
+function measureLane() {
+  if (!mainlineEl || !firstLane) return;
+  const m = mainlineEl.offsetParent?.getBoundingClientRect(), l = firstLane.getBoundingClientRect();
+  if (!m || !m.width || !l.width) return;
+  mainlineEl.style.setProperty("--mx", `${(l.left + l.width / 2 - (m.left + m.width / 2)).toFixed(1)}px`);
+  mainlineEl.style.setProperty("--mk", (l.width / m.width).toFixed(4));
+}
+measureLane();
+addEventListener("resize", measureLane);
+document.fonts?.ready.then(measureLane); // the label column is measured in em
+
+// ───── the four lines wind into the egg ─────
+// Two clear moves. First each lane's line (where its baseline sits once the data has faded) draws in, shortening and
+// tilting onto one side of a diamond around the egg: the chord of its quarter. Then each side bows out into that
+// quarter of the egg's outline: steps the top right, sleep the bottom right, workouts the bottom left, recovery the top
+// left, exactly the arcs the egg is then drawn with. Lines never flip end for end: a quarter that runs right to left is
+// fed from the line's other end. Everything is measured from the page, so it holds on any screen.
+class Wind {
+  private paths: SVGPathElement[];
+  private src: { x: number; y: number }[][] = [];
+  private chord: { x: number; y: number }[][] = [];
+  private arc: { x: number; y: number }[][] = [];
+  private w0 = 1.5; private w1 = 4;
+  private measured = false;
+  private lastW = -1;
+  private static N = 64;
+  constructor(private svg: SVGSVGElement) {
+    this.paths = [...svg.querySelectorAll("path")];
+    addEventListener("resize", () => { this.measured = false; this.lastW = -1; });
+  }
+  private measure() {
+    const stage = this.svg.getBoundingClientRect();
+    const lanes = [...document.querySelectorAll<HTMLElement>(".rows .row:not(.row-axis) .lane-data")];
+    const eggSvg = document.querySelector<SVGSVGElement>(".hatch .egg");
+    const arcEl = eggSvg?.querySelector<SVGPathElement>(".egg-arc");
+    if (!eggSvg || !arcEl || lanes.length !== 4) return;
+    const e = eggSvg.getBoundingClientRect(), k = e.width / 200; // the egg's viewBox is 200 × 240
+    const len = arcEl.getTotalLength(), N = Wind.N;
+    this.src = lanes.map((l) => {
+      const r = l.getBoundingClientRect(), y = r.bottom - stage.top - 0.75;
+      return Array.from({ length: N + 1 }, (_, j) => ({ x: r.left - stage.left + (r.width * j) / N, y }));
+    });
+    this.arc = [0, 1, 2, 3].map((i) => {
+      const pts = Array.from({ length: N + 1 }, (_, j) => {
+        const p = arcEl.getPointAtLength((len * (i + j / N)) / 4);
+        return { x: e.left - stage.left + p.x * k, y: e.top - stage.top + p.y * k };
+      });
+      return pts[N]!.x < pts[0]!.x ? pts.reverse() : pts; // keep left on the left
+    });
+    this.chord = this.arc.map((a) => a.map((_, j) => ({ x: a[0]!.x + ((a[N]!.x - a[0]!.x) * j) / N, y: a[0]!.y + ((a[N]!.y - a[0]!.y) * j) / N })));
+    this.w1 = 4 * k;
+    this.measured = true;
+  }
+  draw(w: number) {
+    if (w === this.lastW && this.measured) return;
+    this.lastW = w;
+    if (w <= 0) { this.measured = false; return; } // measured afresh each time the wind starts
+    if (!this.measured) this.measure();
+    if (!this.measured) return;
+    const ease = (x: number) => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c); };
+    this.paths.forEach((path, i) => {
+      const lag = i * 0.04; // top line a beat first, so the four do not move as one block
+      const a = ease((w - lag) / 0.5), b = ease((w - 0.42 - lag * 0.5) / 0.48); // all four are arcs by 0.96, before the egg takes over
+      const S = this.src[i]!, C = this.chord[i]!, A = this.arc[i]!;
+      let d = "";
+      for (let j = 0; j <= Wind.N; j++) {
+        const x1 = S[j]!.x + (C[j]!.x - S[j]!.x) * a, y1 = S[j]!.y + (C[j]!.y - S[j]!.y) * a;
+        const x = x1 + (A[j]!.x - x1) * b, y = y1 + (A[j]!.y - y1) * b;
+        d += (j ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+      }
+      path.setAttribute("d", d);
+      path.setAttribute("stroke-width", (this.w0 + (this.w1 - this.w0) * a).toFixed(2));
+    });
+  }
+}
+const windSvg = document.querySelector<SVGSVGElement>("[data-wind]");
+const wind = windSvg ? new Wind(windSvg) : null;
+
 const pulseCanvas = document.querySelector<HTMLCanvasElement>("[data-pulse]");
 const pulse = pulseCanvas ? new Pulse(pulseCanvas) : null;
 
 // ───── the per-frame update ─────
 const nav = document.querySelector<HTMLElement>("[data-nav]");
 
+// A mouse wheel moves the page in notches of ~100px. Scrubbed scenes follow a smoothed copy of the scroll position
+// (eased toward the real one in ~0.1 s), so between notches they glide instead of jumping. The page itself scrolls
+// natively, so it still answers the hand at once and can be stopped anywhere; only the drawing catches up.
+let smoothY = scrollY;
+let lastT = performance.now();
+const SMOOTH_MS = 95;
+
 function update() {
   const vh = innerHeight;
+  const now = performance.now();
+  const dt = Math.min(64, now - lastT);
+  lastT = now;
+  const target = scrollY;
+  if (reduce.matches || Math.abs(target - smoothY) > vh * 3) smoothY = target; // jumps (anchors, Reduce Motion) land at once
+  else smoothY += (target - smoothY) * (1 - Math.exp(-dt / SMOOTH_MS));
+  if (Math.abs(target - smoothY) < 0.3) smoothY = target;
+  const lag = target - smoothY; // > 0 while the drawing is still catching up with a scroll down
   for (const s of scenes) {
     const r = s.el.getBoundingClientRect();
+    const top = r.top + lag;
     const total = s.el.offsetHeight - vh;
-    let p = total > 0 ? clamp(-r.top / total) : 1;
+    let p = total > 0 ? clamp(-top / total) : 1;
     if (reduce.matches && !s.steps) p = 1; // unpinned: show where the film ends
     s.p = p;
     if (r.bottom < -vh || r.top > vh * 2) { if (s.step < 0 && s.steps) setStep(s, 0); continue; } // far off screen: skip
@@ -272,11 +371,12 @@ function update() {
   for (const w of views) {
     const r = w.el.getBoundingClientRect();
     if (r.bottom < -vh * 0.5 || r.top > vh * 1.5) continue;
-    applyTracks(w.tracks, reduce.matches ? 1 : clamp((vh - r.top) / (vh + r.height)));
+    applyTracks(w.tracks, reduce.matches ? 1 : clamp((vh - r.top - lag) / (vh + r.height)));
   }
   const film = scenes[0];
-  pulse?.setGather(clamp(((film?.p ?? 0) - 0.02) / 0.1));
+  pulse?.setGather(clamp(((film?.p ?? 0) - 0.02) / 0.08)); // settled by 0.10, before the line (0.09 → 0.14) takes over
   pulse?.setVisible(!!film && film.p < 0.17 && film.el.getBoundingClientRect().bottom > 0);
+  if (wind && !reduce.matches) wind.draw(parseFloat(windSvg!.style.getPropertyValue("--wind")) || 0);
 
   nav?.classList.toggle("scrolled", scrollY > 8);
   nav?.classList.toggle("on-dark", toneAt(30) === "dark");
@@ -294,7 +394,9 @@ function update() {
 }
 
 let queued = false;
-const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; update(); }); } };
+// keeps drawing frames until the smoothed position has caught up, then goes quiet
+const tick = () => { queued = false; update(); if (smoothY !== scrollY) schedule(); };
+const schedule = () => { if (!queued) { queued = true; lastT = Math.max(lastT, performance.now() - 16); requestAnimationFrame(tick); } };
 addEventListener("scroll", schedule, { passive: true });
 addEventListener("resize", schedule);
 reduce.addEventListener("change", schedule);
@@ -303,7 +405,7 @@ update();
 // Reveal on view: once, then stop watching.
 const io = new IntersectionObserver((entries) => {
   for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-}, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+}, { rootMargin: "0px 0px -6% 0px", threshold: 0 }); // as soon as it is a little way in, so you never scroll onto a blank
 document.querySelectorAll("[data-reveal]").forEach((el) => io.observe(el));
 
 // "Tap it": the pet hops, a heart floats up, it says something. Taps during the hop just restart it.

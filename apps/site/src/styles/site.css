@@ -1,6 +1,7 @@
 /* ───────────── tokens ───────────── */
 :root {
   --night: #060607;
+  --seam: clamp(64px, 10vh, 120px); /* dark bands fade in and out from the page over this much, inside their padding */
   --night-2: #111113;
   --on-night: #f1f2ee;
   --on-night-muted: #9e9f9a;
@@ -238,7 +239,10 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 @media (max-width: 760px) { .nav-link { display: none; } }
 
 /* the heartbeat the particles settle into */
-.mainline { position: absolute; left: 0; top: var(--ly); width: 100%; height: 31%; transform: translateY(-50%); opacity: calc(var(--a, 0) - var(--b, 0)); pointer-events: none; }
+/* then it calms (f): the beats flatten and the line draws in to exactly the span of the four lanes below (--mx, --mk
+   are measured by site.ts), where it splits into them */
+.mainline { position: absolute; left: 0; top: var(--ly); width: 100%; height: 31%; opacity: calc(var(--a, 0) - var(--b, 0)); pointer-events: none;
+  transform: translate(calc(var(--mx, 0px) * var(--f, 0)), -50%) scaleX(calc(1 - (1 - var(--mk, 1)) * var(--f, 0))) scaleY(calc(1 - .995 * var(--f, 0))); }
 .mainline svg { width: 100%; height: 100%; overflow: visible; }
 .mainline path { fill: none; stroke: var(--grow); stroke-width: 2.2; stroke-linejoin: round; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 6px rgba(110, 231, 160, .55)); }
 
@@ -247,16 +251,21 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 
 /* the line splits into the four lines of a day, then the four draw back together into the egg */
 .rows { --rs: clamp(62px, 11.5vh, 104px); position: absolute; top: var(--ly); left: 50%; width: min(1040px, 100% - 48px); transform: translate(-50%, -50%);
-  opacity: calc(1 - var(--conv, 0)); pointer-events: none; }
+  /* once the wind begins (site.ts draws the four lines from here on), the rows step aside in the same frame */
+  opacity: calc(1 - clamp(0, var(--wind, 0) * 1000, 1)); pointer-events: none; }
 .row { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); align-items: center; gap: 20px; height: var(--rs);
-  transform: translateY(calc((1.5 - var(--n)) * var(--rs) * (1 - var(--split, 0) + var(--conv, 0)))); }
+  /* gathered, every lane's baseline sits on --ly, the one line they split out of (rows block: 4 lanes + a 26px clock) */
+  position: relative; transform: translateY(calc(((1 - var(--n)) * var(--rs) + 13px) * (1 - var(--split, 0)))); }
+/* each lane's baseline, in its own colour while the line splits, then quiet once the day is drawn */
+.row:not(.row-axis)::after { content: ""; position: absolute; right: 0; bottom: 0; left: calc(8.5em + 20px); height: 1.5px; border-radius: 1px; background: var(--c);
+  opacity: calc(clamp(0, var(--split, 0) * 1000, 1) * (1 - .85 * var(--draw, 0) * (1 - var(--conv, 0)))); }
 .row-0 { --n: 0; } .row-1 { --n: 1; } .row-2 { --n: 2; } .row-3 { --n: 3; }
 .row-label { display: grid; line-height: 1.3; opacity: calc(var(--lab, 0) - 2 * var(--conv, 0)); transform: translateX(calc((1 - var(--lab, 0)) * -10px)); }
 .row-label span { font-size: 13px; color: var(--on-night-muted); }
 .row-label b { font-size: clamp(15px, 1.5vw, 18px); color: var(--c); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Each lane is yesterday on one shared clock, drawn the way the Health app draws it. The day sweeps in from
    the left (clip-path), so every lane reads as time passing; bars also grow up from their baseline. */
-.lane { position: relative; height: 100%; padding-top: 20px; transform: scaleX(calc(1 - .55 * var(--conv, 0)));
+.lane { position: relative; height: 100%; padding-top: 20px; opacity: calc(1 - var(--conv, 0));
   clip-path: inset(-30px calc((1 - var(--draw, 0)) * (100% + 80px) - 80px) -4px -80px); }
 .lane-data { position: relative; height: 100%; border-bottom: 1px solid rgba(255, 255, 255, .1);
   /* hairlines at 06:00, 12:00 and 18:00 */
@@ -293,11 +302,15 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 .row-tag.end::after { left: auto; right: 0; }
 
 /* the shared clock under the four lanes */
-.row-axis { --n: 4; height: 26px; align-items: start; opacity: calc(var(--split, 0) - 2 * var(--conv, 0)); }
+.row-axis { --n: 4; height: 26px; align-items: start; opacity: calc(var(--split, 0) * 2 - 1 - 2 * var(--conv, 0)); }
 .axis { position: relative; height: 100%; font-size: 11px; color: var(--on-night-muted); font-variant-numeric: tabular-nums; }
 .axis span { position: absolute; top: 6px; transform: translateX(-50%); }
 .axis span:nth-child(1) { left: 0; transform: none; } .axis span:nth-child(2) { left: 25%; } .axis span:nth-child(3) { left: 50%; } .axis span:nth-child(4) { left: 75%; }
 .axis span:nth-child(5) { left: 100%; transform: translateX(-100%); }
+
+/* the four lines winding into the egg: drawn by site.ts, in the stage's own pixels */
+.wind { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: calc(clamp(0, var(--wind, 0) * 1000, 1) - var(--arc, 0)); }
+.wind path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
 /* egg → light → pet → the pet hops up to make room for the promise → the watch appears around it, already in place.
    The watch only fades in: Apple's product image may not be scaled or moved by an animation (see Watch.astro). */
@@ -310,8 +323,8 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 .egg { width: 100%; overflow: visible; opacity: calc(1 - var(--fi, 0)); transform: scale(calc(.96 + .06 * var(--fill, 0))); }
 .egg-fill { opacity: var(--fill, 0); }
 .egg-arc { fill: none; stroke: var(--c); stroke-width: 4; stroke-linecap: round;
-  stroke-dasharray: calc(25 * var(--egg, 0)) 100; stroke-dashoffset: calc(-25 * var(--i));
-  opacity: calc(min(1, 10 * var(--egg, 0)) - .5 * var(--fill, 0)); }
+  stroke-dasharray: 25 100; stroke-dashoffset: calc(-25 * var(--i));
+  opacity: calc(var(--arc, 0) - .5 * var(--fill, 0)); }
 .egg-crack { fill: none; stroke: #8f7f60; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 110; stroke-dashoffset: calc(110 - 110 * clamp(0, 2.5 * var(--fill, 0) - 1.5, 1)); }
 .hatch-pet { width: 52%; opacity: var(--pet, 0); transform: translateY(8%) scale(calc(.4 + .6 * var(--pet, 0))); }
@@ -390,7 +403,7 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 .day[data-step="0"] .day-times [data-i="0"], .day[data-step="1"] .day-times [data-i="1"], .day[data-step="2"] .day-times [data-i="2"], .day[data-step="3"] .day-times [data-i="3"], .day[data-step="4"] .day-times [data-i="4"] { background: #fff; color: var(--night); }
 
 /* ───────────── 3. try it ───────────── */
-.try { padding: clamp(96px, 14vh, 160px) 0; background: var(--night); color: var(--on-night); overflow: hidden; }
+.try { padding: clamp(96px, 14vh, 160px) 0; background: linear-gradient(var(--night) calc(100% - var(--seam)), color-mix(in oklab, var(--bg) 10%, var(--night)) calc(100% - var(--seam) * .75), color-mix(in oklab, var(--bg) 50%, var(--night)) calc(100% - var(--seam) * .5), color-mix(in oklab, var(--bg) 90%, var(--night)) calc(100% - var(--seam) * .25), var(--bg)); color: var(--on-night); overflow: hidden; }
 .try .lede { color: var(--on-night-muted); }
 /* the real watch stands alone here, on a soft light (Apple: feature the product on its own) */
 .try::before { content: ""; position: absolute; right: 8%; top: 50%; width: 52vw; max-width: 720px; aspect-ratio: 1; translate: 0 -50%; border-radius: 50%; background: radial-gradient(closest-side, rgba(241, 242, 238, .09), transparent); pointer-events: none; }
@@ -418,8 +431,8 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 /* the life on top, the form it grows into below: the pet badge sits on the seam between them */
 .form-photo { position: relative; width: 100%; aspect-ratio: 4 / 3; background: var(--line); }
 .form-photo img { width: 100%; height: 100%; object-fit: cover; }
-.form-life { position: absolute; left: 12px; top: 12px; padding: 4px 11px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #fff;
-  background: rgba(10, 12, 22, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.form-life { position: absolute; left: 12px; top: 12px; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; letter-spacing: .01em; color: #fff;
+  background: rgba(20, 22, 28, .32); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .28); -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5); }
 .form-pet { position: relative; width: 108px; aspect-ratio: 1; margin: -54px 0 6px; padding: 12px; border-radius: 50%; background: var(--card);
   box-shadow: 0 8px 20px rgba(20, 22, 28, .12); }
 .form .pet { width: 100%; }
@@ -544,7 +557,7 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 .tile.in .paper { transform: translateY(-30px); }
 
 /* ───────────── 6. promise (dark band) ───────────── */
-.promise { padding: clamp(96px, 14vh, 160px) 0; background: var(--night); color: var(--on-night); }
+.promise { padding: clamp(96px, 14vh, 160px) 0; background: linear-gradient(var(--bg), color-mix(in oklab, var(--bg) 90%, var(--night)) calc(var(--seam) * .25), color-mix(in oklab, var(--bg) 50%, var(--night)) calc(var(--seam) * .5), color-mix(in oklab, var(--bg) 10%, var(--night)) calc(var(--seam) * .75), var(--night) var(--seam), var(--night) calc(100% - var(--seam)), color-mix(in oklab, var(--bg) 10%, var(--night)) calc(100% - var(--seam) * .75), color-mix(in oklab, var(--bg) 50%, var(--night)) calc(100% - var(--seam) * .5), color-mix(in oklab, var(--bg) 90%, var(--night)) calc(100% - var(--seam) * .25), var(--bg)); color: var(--on-night); }
 .promises { margin-top: clamp(48px, 8vh, 88px); }
 .promises li { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px 6vw; align-items: baseline; padding: clamp(22px, 4vh, 40px) 0; border-top: 1px solid rgba(255, 255, 255, .12); }
 .promises h3 { font-family: var(--serif); font-weight: 500; font-size: clamp(30px, 4.4vw, 60px); line-height: 1.08; letter-spacing: -.015em; }
@@ -579,9 +592,9 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 .ledger-n .num { font-variant-numeric: tabular-nums;  font-size: clamp(64px, 7vw, 104px); line-height: .9; }
 .ledger-n small { font-family: var(--font); font-size: 14px; color: var(--muted); }
 .privacy-checks { padding: 0 0 clamp(80px, 12vh, 140px); }
-.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px 48px; padding-top: 28px; border-top: 1px solid var(--line); }
-.checks li { display: flex; gap: 10px; align-items: flex-start; }
-.checks .icon { width: 22px; height: 22px; flex: none; margin-top: 3px; color: var(--grow); }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px 40px; padding-top: 32px; border-top: 1px solid var(--line); }
+.checks li { display: grid; gap: 10px; align-content: start; font-size: 16px; line-height: 1.5; }
+.checks .icon { width: 22px; height: 22px; color: var(--grow); }
 
 /* ───────────── 8. price ───────────── */
 .price { padding: clamp(80px, 12vh, 140px) 0; }
@@ -597,7 +610,10 @@ html.js:not(.hero-ready) .hero-title { opacity: 0; animation: show-anyway 0s lin
 
 /* ───────────── 9. faq ───────────── */
 .faq { padding: clamp(80px, 12vh, 140px) 0; }
-.faq h2 { margin-bottom: 28px; }
+/* the heading stays put on the left while the questions run past it */
+.faq-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 32px 6vw; align-items: start; }
+.faq-grid h2 { position: sticky; top: 96px; }
+@media (max-width: 820px) { .faq-grid { grid-template-columns: minmax(0, 1fr); } .faq-grid h2 { position: static; } }
 details { border-top: 1px solid var(--line); }
 details:last-of-type { border-bottom: 1px solid var(--line); }
 summary { list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 4px; font-size: 19px; font-weight: 700; cursor: pointer; }
@@ -609,7 +625,7 @@ details::details-content { block-size: 0; overflow: hidden; transition: block-si
 details[open]::details-content { block-size: auto; }
 
 /* ───────────── 10. join ───────────── */
-.join { padding: clamp(80px, 12vh, 130px) 0 clamp(96px, 14vh, 150px); background: var(--night); color: var(--on-night); overflow: hidden; }
+.join { padding: clamp(80px, 12vh, 130px) 0 clamp(96px, 14vh, 150px); background: linear-gradient(var(--bg), color-mix(in oklab, var(--bg) 90%, var(--night)) calc(var(--seam) * .25), color-mix(in oklab, var(--bg) 50%, var(--night)) calc(var(--seam) * .5), color-mix(in oklab, var(--bg) 10%, var(--night)) calc(var(--seam) * .75), var(--night) var(--seam)); color: var(--on-night); overflow: hidden; }
 .join .lede { color: var(--on-night-muted); }
 .join .h2 { font-size: clamp(36px, 5.2vw, 66px); }
 .join-line { height: clamp(90px, 16vh, 150px); margin-bottom: clamp(28px, 6vh, 56px); }
@@ -628,8 +644,14 @@ details[open]::details-content { block-size: auto; }
 .join-msg[data-kind="done"] { font-size: 18px; font-weight: 700; animation: msgIn var(--t-slow) var(--ease-pop) both; }
 @keyframes msgIn { from { opacity: 0; transform: translateY(8px) scale(.97); } }
 
-.foot { padding: 28px 0 calc(28px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); font-size: 14px; }
-.foot-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* the page ends in the dark the waitlist began, so the last scroll has no seam */
+.foot { padding: 8px 0 calc(36px + env(safe-area-inset-bottom)); background: var(--night); color: var(--on-night-muted); font-size: 14px; }
+.foot a { color: inherit; text-decoration: none; transition: color var(--t-fast) var(--ease); }
+.foot a:hover, .foot a[aria-current] { color: var(--on-night); }
+.foot-top { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; padding: 28px 0; border-top: 1px solid rgba(255, 255, 255, .08); }
+.foot .brand { color: var(--on-night); }
+.foot-links { display: flex; gap: 28px; flex-wrap: wrap; font-size: 15px; }
+.foot-row { display: flex; justify-content: space-between; gap: 8px 24px; flex-wrap: wrap; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: 13px; color: rgba(241, 242, 238, .42); }
 
 /* ───────────── reveal on view ───────────── */
 html.js [data-reveal] { opacity: 0; transform: translateY(20px); transition: opacity var(--t-reveal) var(--ease) var(--d, 0ms), transform var(--t-reveal) var(--ease) var(--d, 0ms); }
@@ -650,6 +672,7 @@ html.js [data-reveal].in { opacity: 1; transform: none; }
   .film-outro { padding: 0 max(36px, 9vw); } /* clear of the card edge once it closes in */
   .rows { --rs: clamp(56px, 9vh, 76px); width: calc(100% - 32px); }
   .row { grid-template-columns: 6em minmax(0, 1fr); gap: 10px; }
+  .row:not(.row-axis)::after { left: calc(6em + 10px); }
   .row-label b { font-size: 13px; white-space: normal; }
   .row-tag { font-size: 11px; }
   .axis span:nth-child(even) { display: none; }
@@ -691,7 +714,7 @@ html.js [data-reveal].in { opacity: 1; transform: none; }
   .film { height: auto; background: var(--night); }
   .film .stage { position: relative; height: auto; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px;
     padding: 104px 0 40px; clip-path: none; }
-  .pulse, .mainline, .cap, .rows, .scroll-hint, .flash, .glow, .egg, .film-intro .cta-row { display: none; }
+  .pulse, .mainline, .wind, .cap, .rows, .scroll-hint, .flash, .glow, .egg, .film-intro .cta-row { display: none; }
   .film-intro { margin: 0; opacity: 1; transform: none; visibility: visible; }
   .hero-trust { position: static; transform: none; opacity: 1; visibility: visible; width: min(1180px, 100% - 48px); }
   html.js:not(.hero-ready) .hero-title { opacity: 1; }
