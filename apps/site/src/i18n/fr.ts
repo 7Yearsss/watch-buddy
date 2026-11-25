@@ -19,12 +19,15 @@ export const fr: Dict = {
     chaptersLabel: "Sections",
     chapters: ["Éclosion", "Journée", "Évolution", "Confidentialité", "Inscription"],
     language: "Langue",
+    faq: "FAQ",
+    privacy: "Confidentialité",
   },
   film: {
     label: "Ouverture : comment votre journée devient votre compagnon",
     eyebrow: "Pulseling",
-    h1: "Il grandit<br />à votre rythme.",
-    lede: "Un petit compagnon qui vit sur votre Apple Watch et grandit un peu chaque matin.",
+    h1: "Il grandit<br />à votre <em>rythme.</em>",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "Il vit sur votre {watch} Apple Watch. Il grandit avec vos {steps} pas, votre {sleep} sommeil et vos {heart} entraînements.",
     cap1: "Vos pas, votre sommeil,<br />vos entraînements et votre récupération d’hier.",
     cap2: "Enroulez-les ensemble,<br />vous obtenez un œuf.",
     rows: [
@@ -40,7 +43,8 @@ export const fr: Dict = {
     seeDay: "Voir sa journée",
     scroll: "Faites défiler",
     factsLabel: "En bref",
-    facts: ["Gratuit à élever", "Un iPhone et une Apple Watch suffisent", "Les données brutes restent sur votre iPhone"],
+    ctaNote: ["Gratuit à élever","iPhone + Apple Watch"],
+    trust: { left: { title: "Ni séries, ni culpabilité", text: "Un jour de pause, et rien ne vous est retiré." }, quote: "Vos données de santé brutes ne quittent jamais votre iPhone.", right: { title: "Rien d’autre à acheter", text: "Votre iPhone et votre Apple Watch suffisent." } },
   },
   day: {
     eyebrow: "Une journée",

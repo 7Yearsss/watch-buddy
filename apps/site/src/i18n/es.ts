@@ -18,12 +18,15 @@ export const es: Dict = {
     chaptersLabel: "Secciones",
     chapters: ["Eclosión", "Día", "Evolución", "Privacidad", "Unirse"],
     language: "Idioma",
+    faq: "Preguntas",
+    privacy: "Privacidad",
   },
   film: {
     label: "Apertura: cómo tu día se convierte en tu mascota",
     eyebrow: "Pulseling",
-    h1: "Crece<br />a tu ritmo.",
-    lede: "Una pequeña mascota que vive en tu Apple Watch y crece un poco cada mañana.",
+    h1: "Crece<br />a tu <em>ritmo.</em>",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "Vive en tu {watch} Apple Watch. Crece con tus {steps} pasos, tu {sleep} sueño y tus {heart} entrenamientos.",
     cap1: "Tus pasos, tu sueño,<br />tus entrenamientos y tu recuperación de ayer.",
     cap2: "Enróllalos juntos<br />y tendrás un huevo.",
     rows: [
@@ -39,7 +42,8 @@ export const es: Dict = {
     seeDay: "Ver su día",
     scroll: "Desliza",
     factsLabel: "De un vistazo",
-    facts: ["Criarla es gratis", "Solo iPhone y Apple Watch", "Los datos en bruto se quedan en tu iPhone"],
+    ctaNote: ["Criarla es gratis","iPhone + Apple Watch"],
+    trust: { left: { title: "Sin rachas ni culpa", text: "Si un día descansas, no pierdes nada." }, quote: "Tus datos de salud en bruto nunca salen de tu iPhone.", right: { title: "Nada más que comprar", text: "Solo tu iPhone y tu Apple Watch." } },
   },
   day: {
     eyebrow: "Un día",

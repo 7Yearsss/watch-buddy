@@ -19,12 +19,15 @@ export const en: Dict = {
     chaptersLabel: "Sections",
     chapters: ["Hatch", "Day", "Evolve", "Privacy", "Join"],
     language: "Language",
+    faq: "FAQ",
+    privacy: "Privacy",
   },
   film: {
     label: "Opening: how your day becomes your pet",
     eyebrow: "Pulseling",
-    h1: "It grows<br />on you.",
-    lede: "A tiny pet that lives on your Apple Watch and grows a little every morning.",
+    h1: "It grows<br /><em>on you.</em>",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "Lives on your {watch} Apple Watch. Grows with your {steps} steps, {sleep} sleep and {heart} workouts.",
     cap1: "Yesterday’s steps, sleep,<br />workouts and recovery.",
     cap2: "Wind them together<br />and you get an egg.",
     rows: [
@@ -40,7 +43,8 @@ export const en: Dict = {
     seeDay: "See its day",
     scroll: "Scroll",
     factsLabel: "At a glance",
-    facts: ["Free to raise", "Just iPhone and Apple Watch", "Raw data stays on your iPhone"],
+    ctaNote: ["Free to raise","iPhone + Apple Watch"],
+    trust: { left: { title: "No streaks, no guilt", text: "Skip a day and nothing is taken away." }, quote: "Your raw health data never leaves your iPhone.", right: { title: "Nothing else to buy", text: "Just the iPhone and Apple Watch you have." } },
   },
   day: {
     eyebrow: "A day",

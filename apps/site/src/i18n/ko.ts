@@ -15,12 +15,15 @@ export const ko: Dict = {
     chaptersLabel: "섹션",
     chapters: ["부화", "하루", "진화", "개인정보", "등록"],
     language: "언어",
+    faq: "자주 묻는 질문",
+    privacy: "개인정보",
   },
   film: {
     label: "오프닝: 당신의 하루가 펫이 되기까지",
     eyebrow: "Pulseling",
-    h1: "당신의 심장 박동으로<br />자랍니다.",
-    lede: "Apple Watch에 사는 작은 펫. 매일 아침 조금씩 자랍니다.",
+    h1: "당신의 <em>심장 박동</em>으로<br />자랍니다.",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "{watch} Apple Watch에 사는 작은 펫. {steps} 걸음 수, {sleep} 수면, {heart} 운동으로 매일 아침 조금씩 자랍니다.",
     cap1: "어제의 걸음 수, 수면,<br />운동, 회복.",
     cap2: "하나로 엮으면<br />알이 됩니다.",
     rows: [
@@ -36,7 +39,8 @@ export const ko: Dict = {
     seeDay: "하루 보기",
     scroll: "스크롤",
     factsLabel: "한눈에",
-    facts: ["키우기는 무료", "iPhone과 Apple Watch만 있으면 됩니다", "원본 데이터는 iPhone에만"],
+    ctaNote: ["키우기는 무료","iPhone + Apple Watch"],
+    trust: { left: { title: "연속 기록도, 감점도 없음", text: "하루 쉬어도 아무것도 줄지 않아요." }, quote: "건강 원본 데이터는 iPhone 밖으로 나가지 않습니다.", right: { title: "더 살 것 없음", text: "가지고 있는 iPhone과 Apple Watch면 충분해요." } },
   },
   day: {
     eyebrow: "하루",

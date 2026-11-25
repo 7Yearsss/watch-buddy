@@ -17,6 +17,33 @@ const reduce = matchMedia("(prefers-reduced-motion: reduce)");
 const clamp = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 document.documentElement.classList.add("js");
 
+// The headline arrives word by word (character by character in Chinese, Japanese and Korean), each one coming
+// into focus. Done once on load; with Reduce Motion it is simply there.
+const heroTitle = document.querySelector<HTMLElement>(".hero-title");
+if (heroTitle && !reduce.matches) {
+  const cjk = /[぀-ヿ㐀-鿿가-힯]/;
+  let w = 0;
+  const walker = document.createTreeWalker(heroTitle, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  for (const node of nodes) {
+    const frag = document.createDocumentFragment();
+    for (const tok of node.data.split(/(\s+)/)) {
+      if (!tok) continue;
+      if (/^\s+$/.test(tok)) { frag.append(tok); continue; }
+      for (const piece of cjk.test(tok) ? [...tok] : [tok]) {
+        const span = document.createElement("span");
+        span.className = "w";
+        span.style.setProperty("--w", String(w++));
+        span.textContent = piece;
+        frag.append(span);
+      }
+    }
+    node.replaceWith(frag);
+  }
+}
+document.documentElement.classList.add("hero-ready");
+
 interface Strings { lines: string[]; badEmail: string; noEmail: string; joining: string; joined: string; change: string; offline: string; join: string }
 const T: Strings = JSON.parse(document.getElementById("i18n")?.textContent ?? "{}");
 
@@ -100,20 +127,30 @@ function toneAt(y: number): string {
 }
 
 // ───── opening particle field ─────
+// At rest it is a nebula: a wide band of dust drifting across the whole screen, thick in places and thin in others,
+// with a few loose stars around it. A mouse or pen stirs it: dust near the pointer is pushed aside and flows back.
+// As you scroll (gather 0 → 1) every grain settles onto the heartbeat line, which then takes over.
 class Pulse {
   private ctx: CanvasRenderingContext2D;
   private w = 0;
   private h = 0;
-  private pts: { u: number; off: number; a: number; s: number; v: number }[] = [];
+  private ly = 0.58; // where the heartbeat line sits, as a fraction of the height (the stage's --ly)
+  private pts: { u: number; off: number; a: number; b: number; s: number; v: number; star: number; sy: number; k: number }[] = [];
   private gather = 0;
   private visible = true;
   private raf = 0;
   private t0 = performance.now();
+  private px = -1e4; private py = -1e4; private stir = 0; private stirTarget = 0; private lastMove = 0;
   constructor(private c: HTMLCanvasElement) {
     this.ctx = c.getContext("2d")!;
     this.resize();
     addEventListener("resize", () => this.resize());
     document.addEventListener("visibilitychange", () => this.kick());
+    addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch" || reduce.matches || !this.visible) return;
+      const r = this.c.getBoundingClientRect();
+      this.px = e.clientX - r.left; this.py = e.clientY - r.top; this.lastMove = performance.now();
+    }, { passive: true });
     this.kick();
   }
   setGather(g: number) {
@@ -129,9 +166,16 @@ class Pulse {
     this.c.width = Math.round(this.w * dpr);
     this.c.height = Math.round(this.h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const n = Math.round(Math.min(2400, Math.max(900, (this.w * this.h) / 520)));
+    this.ly = (parseFloat(getComputedStyle(this.c.parentElement!).getPropertyValue("--ly")) || 58) / 100;
+    const n = Math.round(Math.min(11000, Math.max(3200, (this.w * this.h) / 80)));
     const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-    this.pts = Array.from({ length: n }, () => ({ u: Math.random(), off: gauss(), a: 0.18 + Math.random() * 0.7, s: Math.random() < 0.12 ? 2 : 1.2, v: 0.6 + Math.random() * 0.8 }));
+    const pts = Array.from({ length: n }, () => {
+      const star = Math.random() < 0.07 ? 1 : 0;
+      const a = star ? 0.1 + Math.random() * 0.3 : 0.15 + Math.random() * 0.85;
+      return { u: Math.random(), off: gauss(), a, b: a > 0.6 ? 2 : a > 0.35 ? 1 : 0, s: Math.random() < 0.08 ? 1.7 : 1, v: 0.6 + Math.random() * 0.8, star, sy: Math.random(), k: Math.floor(Math.random() * 3) };
+    });
+    pts.sort((p, q) => p.b - q.b); // grouped by brightness, so each group is one path and one fill
+    this.pts = pts;
     this.draw((performance.now() - this.t0) / 1000);
   }
   private kick() {
@@ -150,26 +194,59 @@ class Pulse {
     }
     return y;
   }
+  // per-frame shape of the band, sampled in columns, so each grain only looks it up
+  private static COLS = 480;
+  private bandT = new Float32Array(Pulse.COLS + 1);
+  private widthT = new Float32Array(Pulse.COLS + 1);
+  private strandT = [new Float32Array(Pulse.COLS + 1), new Float32Array(Pulse.COLS + 1), new Float32Array(Pulse.COLS + 1)];
+  private lineT = new Float32Array(Pulse.COLS + 1);
   private draw(t: number) {
     const { ctx, w, h } = this;
     ctx.clearRect(0, 0, w, h);
     const g = this.gather;
-    const cy = h * 0.42;
+    const e = g * g * (3 - 2 * g); // ease the settle
+    const cy = h * this.ly;
     const amp = h * 0.085;
-    const spread = h * 0.2 * (1 - g) * (1 - g);
-    const alphas = [0.25, 0.5, 0.85];
-    ctx.fillStyle = "#f1f2ee";
-    // three alpha buckets: one globalAlpha change per bucket instead of per point
-    for (let b = 0; b < 3; b++) {
-      ctx.globalAlpha = alphas[b]!;
-      for (const p of this.pts) {
-        const bucket = p.a > 0.6 ? 2 : p.a > 0.35 ? 1 : 0;
-        if (bucket !== b) continue;
-        const x = ((p.u + t * 0.004 * p.v) % 1) * w;
-        const breathe = 1 + 0.15 * Math.sin(t * 0.7 + p.u * 9);
-        ctx.fillRect(x, cy + this.wave(x / w, t) * amp + p.off * spread * breathe, p.s, p.s);
-      }
+    const COLS = Pulse.COLS;
+    for (let c = 0; c <= COLS; c++) {
+      const X = c / COLS;
+      // the nebula: a band running up from bottom left to top right, swelling and thinning as it goes,
+      // with three strands braided through it
+      this.bandT[c] = h * (0.7 - 0.5 * X) + h * 0.07 * Math.sin(X * 5.2 + t * 0.12) + h * 0.035 * Math.sin(X * 11 - t * 0.2);
+      const width = h * (0.05 + 0.09 * (0.5 + 0.5 * Math.sin(X * 6.3 + t * 0.07 + 1.3))) * (0.75 + 0.25 * Math.sin(X * 2.7 - t * 0.05));
+      this.widthT[c] = width;
+      for (let k = 0; k < 3; k++) this.strandT[k]![c] = (k - 1) * width * 0.9 * Math.sin(X * (3.1 + k) + t * (0.09 + 0.03 * k) + k * 2.1);
+      if (e > 0) this.lineT[c] = cy + this.wave(X, t) * amp;
     }
+    // the pointer's push fades in when it moves and out when it rests, so the dust never jumps
+    this.stirTarget = performance.now() - this.lastMove < 1200 ? 1 : 0;
+    this.stir += (this.stirTarget - this.stir) * 0.06;
+    const stir = this.stir * (1 - e);
+    const R = Math.max(120, Math.min(w, h) * 0.2), R2 = R * R;
+    const breathe = 0.12 * Math.sin(t * 0.6);
+    const alphas = [0.2, 0.45, 0.85];
+    ctx.fillStyle = "#f1f2ee";
+    let bucket = -1;
+    for (const p of this.pts) {
+      if (p.b !== bucket) {
+        if (bucket >= 0) ctx.fill();
+        bucket = p.b; ctx.globalAlpha = alphas[bucket]!; ctx.beginPath();
+      }
+      const X = (p.u + t * 0.004 * p.v) % 1;
+      const c = (X * COLS) | 0;
+      let px = X * w;
+      const restY = p.star ? p.sy * h : this.bandT[c]! + this.strandT[p.k]![c]! + p.off * this.widthT[c]! * (p.b === 0 ? 2.4 : 0.55) * (1 + breathe);
+      let py = e > 0 ? restY + (this.lineT[c]! + p.off * h * 0.003 - restY) * e : restY;
+      if (stir > 0.01) {
+        const dx = px - this.px, dy = py - this.py, d2 = dx * dx + dy * dy;
+        if (d2 < R2) {
+          const d = Math.sqrt(d2) || 1, f = (1 - d / R) ** 2 * 38 * stir;
+          px += (dx / d) * f; py += (dy / d) * f;
+        }
+      }
+      ctx.rect(px, py, p.s, p.s);
+    }
+    if (bucket >= 0) ctx.fill();
     ctx.globalAlpha = 1;
   }
 }

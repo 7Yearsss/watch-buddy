@@ -18,12 +18,15 @@ export const zh = {
     chaptersLabel: "页面章节",
     chapters: ["孵化", "一天", "进化", "隐私", "加入"],
     language: "语言",
+    faq: "常见问题",
+    privacy: "隐私",
   },
   film: {
     label: "开场：你的一天如何变成它",
     eyebrow: "Pulseling",
-    h1: "跟着你的心跳<br />长大",
-    lede: "一只住在 Apple Watch 上的小宠物，每天早上长大一点。",
+    h1: "跟着你的<em>心跳</em><br />长大",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "住在你的 {watch} Apple Watch 上，靠你的 {steps} 步数、{sleep} 睡眠和 {heart} 运动，每天早上长大一点。",
     cap1: "这是你昨天的步数、睡眠、<br />运动和恢复。",
     cap2: "把它们绕在一起，<br />就是一颗蛋。",
     rows: [
@@ -39,7 +42,8 @@ export const zh = {
     seeDay: "看它的一天",
     scroll: "往下滑",
     factsLabel: "三件事",
-    facts: ["养成免费", "只要 iPhone 和 Apple Watch", "原始数据只在你的 iPhone 上"],
+    ctaNote: ["养成免费","iPhone + Apple Watch"],
+    trust: { left: { title: "不打卡，不扣分", text: "哪天偷懒，什么都不会少。" }, quote: "原始健康数据，从不离开你的 iPhone。", right: { title: "不用再买设备", text: "有 iPhone 和 Apple Watch 就够了。" } },
   },
   day: {
     eyebrow: "一天",

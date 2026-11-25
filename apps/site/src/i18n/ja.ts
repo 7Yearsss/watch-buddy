@@ -15,12 +15,15 @@ export const ja: Dict = {
     chaptersLabel: "セクション",
     chapters: ["孵化", "一日", "進化", "プライバシー", "登録"],
     language: "言語",
+    faq: "よくある質問",
+    privacy: "プライバシー",
   },
   film: {
     label: "オープニング：あなたの一日が相棒になるまで",
     eyebrow: "Pulseling",
-    h1: "あなたの鼓動で、<br />育つ。",
-    lede: "Apple Watchに住む小さなペット。毎朝、少しずつ大きくなります。",
+    h1: "あなたの<em>鼓動</em>で、<br />育つ。",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "{watch} Apple Watchに住む、小さな相棒。{steps} 歩数と {sleep} 睡眠と {heart} ワークアウトで、毎朝すこしずつ育ちます。",
     cap1: "昨日の歩数、睡眠、<br />ワークアウト、回復。",
     cap2: "ひとつに編むと、<br />卵になります。",
     rows: [
@@ -36,7 +39,8 @@ export const ja: Dict = {
     seeDay: "一日を見る",
     scroll: "スクロール",
     factsLabel: "ひと目で",
-    facts: ["育成は無料", "iPhoneとApple Watchだけ", "生データはiPhoneの中に"],
+    ctaNote: ["育成は無料","iPhone + Apple Watch"],
+    trust: { left: { title: "連続記録も、減点もなし", text: "サボった日も、何も減りません。" }, quote: "健康の生データは、iPhoneの外に出ません。", right: { title: "買い足すものはなし", text: "手持ちのiPhoneとApple Watchだけ。" } },
   },
   day: {
     eyebrow: "一日",

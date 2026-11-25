@@ -15,12 +15,15 @@ export const zhHant: Dict = {
     chaptersLabel: "頁面章節",
     chapters: ["孵化", "一天", "進化", "隱私", "加入"],
     language: "語言",
+    faq: "常見問題",
+    privacy: "隱私",
   },
   film: {
     label: "開場：你的一天如何變成牠",
     eyebrow: "Pulseling",
-    h1: "跟著你的心跳<br />長大",
-    lede: "一隻住在 Apple Watch 上的小寵物，每天早上長大一點。",
+    h1: "跟著你的<em>心跳</em><br />長大",
+    /** {watch} {steps} {sleep} {heart} become small inline icons */
+    lede: "住在你的 {watch} Apple Watch 上，靠你的 {steps} 步數、{sleep} 睡眠和 {heart} 運動，每天早上長大一點。",
     cap1: "這是你昨天的步數、睡眠、<br />運動和恢復。",
     cap2: "把它們繞在一起，<br />就是一顆蛋。",
     rows: [
@@ -36,7 +39,8 @@ export const zhHant: Dict = {
     seeDay: "看牠的一天",
     scroll: "往下滑",
     factsLabel: "三件事",
-    facts: ["養成免費", "只要 iPhone 和 Apple Watch", "原始資料只在你的 iPhone 上"],
+    ctaNote: ["養成免費","iPhone + Apple Watch"],
+    trust: { left: { title: "不打卡，不扣分", text: "哪天偷懶，什麼都不會少。" }, quote: "原始健康資料，從不離開你的 iPhone。", right: { title: "不用再買裝置", text: "有 iPhone 和 Apple Watch 就夠了。" } },
   },
   day: {
     eyebrow: "一天",
