@@ -3,7 +3,8 @@
  * Stand-in pet art (simple vector placeholders) until the illustrator's finals land (docs/design/09).
  * Same shape language as the game: round body, dark same-hue outline, one hard-edged shadow, big eyes.
  */
-type Kind = "egg" | "water" | "fire" | "grass" | "flying" | "fighting" | "ground" | "dragon";
+import { DICTS, langOf } from "../i18n";
+type Kind ="egg" | "water" | "fire" | "grass" | "flying" | "fighting" | "ground" | "dragon";
 interface Props { kind: Kind; mood?: "happy" | "sleep" | "idle"; class?: string; label?: string }
 const { kind, mood = "idle", class: cls = "", label } = Astro.props;
 
@@ -23,9 +24,10 @@ const drop = "M60 10 C72 28 100 52 100 78 C100 100 82 112 60 112 C38 112 20 100 
 const round = "M60 30 C86 30 102 52 102 78 C102 100 84 112 60 112 C36 112 18 100 18 78 C18 52 34 30 60 30 Z";
 const eggPath = "M60 12 C84 12 100 50 100 76 C100 100 82 114 60 114 C38 114 20 100 20 76 C20 50 36 12 60 12 Z";
 const body = kind === "egg" ? eggPath : kind === "water" ? drop : round;
-const name = label ?? { egg: "一颗蛋", water: "水系初始精灵", fire: "火系初始精灵", grass: "草系初始精灵", flying: "飞行形态", fighting: "战斗形态", ground: "地面形态", dragon: "龙形态" }[kind];
+const t = DICTS[langOf(Astro.currentLocale)].pet;
+const name = label ?? t.names[kind];
 ---
-<svg class={`pet ${cls}`} viewBox="0 0 120 120" role="img" aria-label={`${name}（示意图）`}>
+<svg class={`pet ${cls}`} viewBox="0 0 120 120" role="img" aria-label={`${name}${t.suffix}`}>
   <defs><clipPath id={id}><path d={body} /></clipPath></defs>
 
   {kind === "flying" && (

@@ -1,13 +1,22 @@
 ---
-/** A plain Apple Watch-shaped frame drawn in CSS (no Apple artwork). Children go on the screen. */
-interface Props { time?: string; class?: string; timeSlot?: boolean }
-const { time = "09:41", class: cls = "", timeSlot = false } = Astro.props;
+/**
+ * Apple Watch Series 11 (46 mm, Jet Black, Sport Band) from Apple's official Product Bezels
+ * (developer.apple.com/design/resources), used as the App Store Marketing Guidelines ask:
+ * "use Apple-provided product bezels … to display your app on the Apple devices it supports".
+ * Rules that follow from those guidelines, so keep them when you touch this:
+ * - the image is used as is: never scaled, moved, tilted, cropped or shadowed by an animation; it may only appear and disappear
+ * - nothing drawn on top of the case or band; our content lives only inside the screen, under the image
+ * - at least 200 px tall on screen (that's --w ≥ 128px)
+ * Children go on the screen. The screen sits under the image, whose transparent hole gives it its exact shape.
+ */
+interface Props { time?: string; class?: string; timeSlot?: boolean; app?: string }
+const { time = "09:41", class: cls = "", timeSlot = false, app = "Pulseling" } = Astro.props;
 ---
 <div class={`watch ${cls}`}>
-  <span class="watch-crown" aria-hidden="true"></span>
-  <span class="watch-side" aria-hidden="true"></span>
   <div class="watch-screen">
+    {app && <span class="watch-app" aria-hidden="true">{app}</span>}
     <span class="watch-time" data-watch-time={timeSlot ? "" : undefined} aria-hidden="true">{time}</span>
     <slot />
   </div>
+  <img class="watch-device" src="/devices/apple-watch-s11-46-jet-black.webp" width="560" height="880" alt="" decoding="async" />
 </div>

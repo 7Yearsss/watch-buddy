@@ -1,0 +1,430 @@
+---
+/**
+ * The landing page, in either language. Copy lives in src/i18n; this file only holds structure, art and timing.
+ * src/pages/index.astro renders it in English, src/pages/zh/index.astro in Chinese.
+ */
+import "../styles/site.css";
+import Pet from "./Pet.astro";
+import Watch from "./Watch.astro";
+import Icon from "./Icon.astro";
+import { PHOTOS, src, srcset } from "../data/photos";
+import { DICTS, LANGS, PATHS, HREFLANG, langOf } from "../i18n";
+
+const lang = langOf(Astro.currentLocale);
+const t = DICTS[lang];
+const abs = (p: string) => (Astro.site ? new URL(p, Astro.site).href : null);
+
+// ── the four lines of a day (viewBox 0 0 1000 100, x = time of day) ──
+const g = (x: number, c: number, w: number) => Math.exp(-((x - c) ** 2) / (2 * w * w));
+const ecg = (x: number, beats: number[], k = 1) =>
+  beats.reduce((y, c) => y - 34 * k * g(x, c, 0.0045) + 12 * k * g(x, c + 0.011, 0.005) - 5 * k * g(x, c - 0.03, 0.009) - 7 * k * g(x, c + 0.05, 0.014), 0);
+const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const path = (fn: (t: number) => number, n = 320) =>
+  Array.from({ length: n + 1 }, (_, i) => `${i ? "L" : "M"}${((i / n) * 1000).toFixed(1)} ${fn(i / n).toFixed(1)}`).join("");
+const h = (hh: number) => hh / 24;
+
+const mainline = path((t) => 50 + ecg(t, [0.14, 0.38, 0.62, 0.86], 1.2), 420);
+const rowArt = [
+  { color: "#7ee0a2", at: [h(12.6), h(18.4)],
+    d: path((t) => 66 - 22 * g(t, h(8.2), 0.025) - 34 * g(t, h(12.6), 0.035) - 28 * g(t, h(18.4), 0.03) - 3 * Math.sin(t * 90) * smooth(h(7), h(8), t) * (1 - smooth(h(22), h(23), t))) },
+  { color: "#8db8ff", at: [h(7.2), h(23.6)],
+    d: path((t) => 34 + 34 * (1 - smooth(h(6.9), h(7.4), t)) + 34 * smooth(h(23.4), h(23.9), t) - 4 * Math.sin(t * 160) * (1 - smooth(h(6.9), h(7.4), t))) },
+  { color: "#ff9a62", at: [h(19.3)],
+    d: path((t) => 70 - 10 * g(t, h(12.6), 0.02) - 52 * g(t, h(19.3), 0.016) - 2 * Math.sin(t * 120)) },
+  { color: "#ff86ad", at: [0.5],
+    d: path((t) => 54 + ecg(t, [0.2, 0.5, 0.8]), 420) },
+];
+const rows = rowArt.map((r, i) => ({ ...r, ...t.film.rows[i]!, tags: r.at.map((at, k) => ({ at, text: t.film.rows[i]!.tags[k]! })) }));
+const egg = "M100 18 C142 18 170 92 170 142 C170 194 138 224 100 224 C62 224 30 194 30 142 C30 92 58 18 100 18 Z";
+
+const dayPhotos = [PHOTOS.morning, PHOTOS.walk, PHOTOS.run, PHOTOS.sleep, PHOTOS.cycle];
+const day = t.day.items.map((d, i) => ({ ...d, photo: dayPhotos[i]! }));
+
+const formArt = [
+  { kind: "flying", photo: PHOTOS.cycle },
+  { kind: "fighting", photo: PHOTOS.strength },
+  { kind: "ground", photo: PHOTOS.walk },
+  { kind: "dragon", photo: PHOTOS.yoga },
+] as const;
+const forms = formArt.map((f, i) => ({ ...f, ...t.mirror.forms[i]! }));
+
+const playIcons = ["sun", "book", "swords", "watch", "mail"] as const;
+const play = t.play.cards.map((c, i) => ({ ...c, icon: playIcons[i]! }));
+const raw = t.privacy.raw;
+
+const chapterIds = ["#top", "#day", "#mirror", "#privacy", "#join"];
+const chapters = chapterIds.map((href, i) => ({ href, label: t.ui.chapters[i]! }));
+---
+<!doctype html>
+<html lang={t.htmlLang}>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{t.meta.title}</title>
+  <meta name="description" content={t.meta.description} />
+  <meta name="theme-color" content="#060607" />
+  {abs(PATHS[lang]) && <link rel="canonical" href={abs(PATHS[lang])} />}
+  {LANGS.map((l) => abs(PATHS[l]) && <link rel="alternate" hreflang={HREFLANG[l]} href={abs(PATHS[l])} />)}
+  {abs("/") && <link rel="alternate" hreflang="x-default" href={abs("/")} />}
+  <link rel="preload" as="image" href={src(PHOTOS.morning)} />
+  {lang === "en" && (
+    /* First visit to /: follow the browser's preferred languages to the first one we have. English, or a language
+       picked by hand earlier (the language menu stores it), stays put. */
+    <script is:inline>
+      try {
+        if (!localStorage.getItem("lang")) {
+          var prefs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+          for (var i = 0; i < prefs.length; i++) {
+            var p = String(prefs[i]).toLowerCase(), to = null;
+            if (/^en\b/.test(p)) break;
+            if (/^zh-(tw|hk|mo|hant)\b/.test(p)) to = "zh-hant";
+            else if (/^zh\b/.test(p)) to = "zh";
+            else if (/^(ja|ko|de|fr|es)\b/.test(p)) to = p.slice(0, 2);
+            if (to) { location.replace("/" + to + "/" + location.hash); break; }
+          }
+        }
+      } catch (e) {}
+    </script>
+  )}
+</head>
+<body>
+  <a class="skip" href="#main">{t.ui.skip}</a>
+
+  <header class="nav" data-nav>
+    <a class="brand" href="#top" aria-label={t.ui.home}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6" /></svg>
+      Pulseling
+    </a>
+    <div class="nav-end">
+      <button class="lang-btn" type="button" popovertarget="langs" aria-label={`${t.ui.language}: ${t.langName}`}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" /></svg>
+        <span>{t.langName}</span>
+      </button>
+      <div class="lang-menu" id="langs" popover aria-label={t.ui.language}>
+        <ul>
+          {LANGS.map((l) => (
+            <li><a href={PATHS[l]} hreflang={HREFLANG[l]} lang={DICTS[l].htmlLang} data-lang={l} aria-current={l === lang ? "page" : undefined}>
+              <span>{DICTS[l].langName}</span>
+              {l === lang && <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
+            </a></li>
+          ))}
+        </ul>
+      </div>
+      <a class="btn btn-small" href="#join">{t.ui.join}</a>
+    </div>
+  </header>
+
+  <nav class="chapters" data-chapters aria-label={t.ui.chaptersLabel}>
+    {chapters.map((c) => <a href={c.href} data-chapter={c.href}><span>{c.label}</span><i aria-hidden="true"></i></a>)}
+  </nav>
+
+  <main id="main">
+    <!--
+      1. Opening film. One continuous object: a field of particles gathers into a heartbeat line, the line splits into
+      the four lines of your day, the four lines wind into an egg (each line becomes one arc of it), the egg fills with
+      light and hatches, the watch lands around the pet, and the whole scene shrinks into a card.
+    -->
+    <section class="film" id="top" data-scene data-tone="dark" aria-label={t.film.label}>
+      <div class="stage" data-scrub="card:0.9,1">
+        <canvas class="pulse" data-pulse data-scrub="cout:0.11,0.16" aria-hidden="true"></canvas>
+
+        <div class="film-intro" data-scrub="out:0.03,0.1">
+          <p class="eyebrow" style="--n:0">{t.film.eyebrow}</p>
+          <h1 style="--n:1" set:html={t.film.h1} />
+          <p class="lede" style="--n:2">{t.film.lede}</p>
+          <div class="cta-row" style="--n:3">
+            <a class="btn btn-primary" href="#join">{t.ui.join}</a>
+          </div>
+        </div>
+
+        <div class="mainline" data-scrub="a:0.08,0.13;b:0.2,0.26" aria-hidden="true">
+          <svg viewBox="0 0 1000 100" preserveAspectRatio="none"><path d={mainline} /></svg>
+        </div>
+
+        <p class="cap cap-1" data-scrub="a:0.17,0.22;b:0.32,0.36" set:html={t.film.cap1} />
+        <p class="cap cap-2" data-scrub="a:0.38,0.42;b:0.54,0.58" set:html={t.film.cap2} />
+
+        <div class="rows" data-scrub="split:0.14,0.24;conv:0.36,0.47" aria-hidden="true">
+          {rows.map((r, i) => (
+            <div class={`row row-${i}`} style={`--c:${r.color}`} data-scrub={`draw:${0.16 + i * 0.025},${0.25 + i * 0.025};lab:${0.2 + i * 0.02},${0.26 + i * 0.02}`}>
+              <div class="row-label"><span>{r.label}</span><b>{r.value}</b></div>
+              <div class="row-line">
+                <svg viewBox="0 0 1000 100" preserveAspectRatio="none"><path d={r.d} pathLength="100" /></svg>
+                {r.tags.map((tag) => <span class="row-tag" style={`left:${(tag.at * 100).toFixed(1)}%`}>{tag.text}</span>)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div class="hatch" data-scrub="egg:0.38,0.5;fill:0.49,0.56;fi:0.555,0.575;fo:0.575,0.64;pet:0.56,0.64;lift:0.64,0.72;land:0.72,0.8">
+          <div class="glow" aria-hidden="true"></div>
+          <Watch class="bezel" time={t.film.watchTime} />
+          <svg class="egg" viewBox="0 0 200 240" aria-hidden="true">
+            <defs><radialGradient id="eggLight" cx="50%" cy="58%" r="60%"><stop offset="0" stop-color="#fffdf5" /><stop offset=".7" stop-color="#f4ecd8" /><stop offset="1" stop-color="#d9cdb2" /></radialGradient></defs>
+            <path class="egg-fill" d={egg} fill="url(#eggLight)" />
+            {rows.map((r, i) => <path class="egg-arc" d={egg} pathLength="100" style={`--c:${r.color};--i:${i}`} />)}
+            <path class="egg-crack" d="M70 120 L86 108 L96 124 L110 104 L122 122 L134 110" />
+          </svg>
+          <div class="hatch-pet"><Pet kind="water" mood="happy" label={t.film.hatched} /></div>
+          <div class="flash" aria-hidden="true"></div>
+        </div>
+
+        <div class="film-outro" data-scrub="outro:0.77,0.85;cta:0.81,0.88">
+          <h2 class="display" set:html={t.film.outro} />
+          <p class="lede" set:html={t.film.outroLede} />
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#join">{t.ui.join}</a>
+            <a class="btn btn-ghost" href="#day">{t.film.seeDay}</a>
+          </div>
+        </div>
+
+        <p class="scroll-hint" data-scrub="out:0.01,0.05" aria-hidden="true">{t.film.scroll}</p>
+      </div>
+      <ul class="facts" aria-label={t.film.factsLabel}>
+        {t.film.facts.map((f) => <li>{f}</li>)}
+      </ul>
+    </section>
+
+    <!-- 2. A day on the wrist: the photo behind is that moment of your day; the watch shows what it's doing. -->
+    <section class="day" id="day" data-scene data-steps={day.length} data-tone="dark" aria-labelledby="day-title">
+      <div class="stage">
+        <div class="day-photos" data-scrub="zoom:0,1" aria-hidden="true">
+          {day.map((d, i) => <img class="day-photo" data-i={i} src={src(d.photo)} srcset={srcset(d.photo)} sizes="100vw" alt="" loading={i ? "lazy" : "eager"} decoding="async" />)}
+          <div class="scrim"></div>
+        </div>
+        <div class="day-inner">
+          <div class="day-copy">
+            <p class="eyebrow">{t.day.eyebrow}</p>
+            <h2 id="day-title" class="h2" set:html={t.day.h2} />
+            <ol class="day-times">
+              {day.map((d, i) => <li data-i={i}><span data-clock={d.clock}>{d.chip}</span></li>)}
+            </ol>
+            <div class="day-texts">
+              {day.map((d, i) => (
+                <div class="day-text" data-i={i}>
+                  <h3>{d.title}</h3>
+                  <p>{d.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <Watch class="day-watch" time="--:--" timeSlot>
+            <div class="scr" data-i="0">
+              <div class="mini-ring"><Pet kind="water" mood="happy" /></div>
+              <p class="scr-big">+14<small>{t.day.screen.growth}</small></p>
+              <p class="scr-cap">{t.day.screen.slept}</p>
+            </div>
+            <div class="scr" data-i="1">
+              <div class="bubble">{t.day.screen.steps}</div>
+              <Pet kind="water" />
+            </div>
+            <div class="scr" data-i="2">
+              <div class="bubble">{t.day.screen.ran}</div>
+              <Pet kind="water" mood="happy" class="hop" />
+              <p class="scr-cap">{t.day.screen.off}</p>
+            </div>
+            <div class="scr scr-night" data-i="3">
+              <div class="bubble dim">zzz…</div>
+              <Pet kind="water" mood="sleep" />
+            </div>
+            <div class="scr" data-i="4">
+              <div class="postcard">
+                <svg viewBox="0 0 120 56" aria-hidden="true"><path d="M0 44 C20 30 34 34 50 26 C66 18 82 26 120 14 L120 56 L0 56 Z" fill="#7FB389" /><circle cx="94" cy="14" r="7" fill="#FFD98A" /></svg>
+                <span>{t.day.screen.place}</span>
+              </div>
+              <p class="scr-cap">{t.day.screen.brought}</p>
+            </div>
+          </Watch>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Try it. -->
+    <section class="try" data-tone="dark" aria-labelledby="try-title">
+      <div class="wrap try-grid">
+        <div data-reveal>
+          <p class="eyebrow">{t.try.eyebrow}</p>
+          <h2 id="try-title" class="h2" set:html={t.try.h2} />
+          <p class="lede">{t.try.lede}</p>
+        </div>
+        <div class="try-watch" data-reveal style="--d:120ms">
+          <Watch time={t.try.watchTime}>
+            <button class="try-pet" type="button" data-try aria-label={t.try.button}>
+              <span class="try-bubble" data-try-line aria-live="polite">{t.try.first}</span>
+              <span class="try-body"><Pet kind="water" class="face-idle" /><Pet kind="water" mood="happy" class="face-happy" /></span>
+              <span class="try-heart" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" /></svg>
+              </span>
+            </button>
+          </Watch>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Same egg, different lives. -->
+    <section class="mirror" id="mirror" data-scene aria-labelledby="mirror-title">
+      <div class="stage wrap">
+        <div class="center" data-reveal>
+          <p class="eyebrow">{t.mirror.eyebrow}</p>
+          <h2 id="mirror-title" class="h2" set:html={t.mirror.h2} />
+          <p class="lede">{t.mirror.lede}</p>
+        </div>
+        <div class="forms-wrap">
+        <div class="mirror-egg" data-scrub="egg:0.46,0.6" aria-hidden="true"><Pet kind="egg" /></div>
+        <ul class="forms">
+          {forms.map((f, i) => (
+            <li class="form" data-reveal style={`--d:${i * 90}ms;--i:${i}`} data-scrub={`fan:${(0.06 + i * 0.05).toFixed(2)},${(0.34 + i * 0.05).toFixed(2)};grow:${(0.5 + i * 0.04).toFixed(2)},${(0.64 + i * 0.04).toFixed(2)}`}>
+              <div class="form-photo">
+                <img src={src(f.photo)} srcset={srcset(f.photo)} sizes="(max-width: 760px) 90vw, 25vw" alt={t.alts[f.photo.file]} loading="lazy" decoding="async" />
+                <span class="form-life">{f.life}</span>
+              </div>
+              <div class="form-pet"><Pet kind={f.kind} /></div>
+              <b>{f.name}</b>
+              <span class="muted">{f.look}</span>
+            </li>
+          ))}
+        </ul>
+        </div>
+        <p class="titles" data-reveal data-scrub="tl:0.8,0.92">{t.mirror.titlesLead}<span>{t.mirror.titles}</span></p>
+      </div>
+    </section>
+
+    <!-- 5. What there is to do. -->
+    <section class="play" aria-labelledby="play-title">
+      <div class="wrap">
+        <div data-reveal>
+          <p class="eyebrow">{t.play.eyebrow}</p>
+          <h2 id="play-title" class="h2" set:html={t.play.h2} />
+        </div>
+        <figure class="band" data-reveal data-view data-scrub="v:0,1">
+          <img src={src(PHOTOS.friends)} srcset={srcset(PHOTOS.friends)} sizes="(max-width: 1120px) 100vw, 1120px" alt={t.alts.friends} loading="lazy" decoding="async" />
+          <figcaption>
+            <Icon name="users" />
+            <h3>{t.play.friendsTitle}</h3>
+            <p>{t.play.friendsText}</p>
+          </figcaption>
+        </figure>
+        <ul class="cards">
+          {play.map((c, i) => (
+            <li class="card" data-reveal style={`--d:${(i % 3) * 70}ms`}>
+              <Icon name={c.icon} />
+              <h3>{c.title}</h3>
+              <p>{c.text}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 6. No pressure. -->
+    <section class="promise" data-tone="dark" aria-labelledby="promise-title">
+      <div class="wrap">
+        <div data-reveal>
+          <p class="eyebrow">{t.promise.eyebrow}</p>
+          <h2 id="promise-title" class="h2" set:html={t.promise.h2} />
+        </div>
+        <ul class="promises">
+          {t.promise.items.map((p) => (
+            <li data-view data-scrub="lit:0.22,0.42"><h3>{p.title}</h3><p>{p.text}</p></li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <!-- 7. Privacy: a day of raw readings (computed on the phone) collapses into the one line that is uploaded. -->
+    <section class="privacy" id="privacy" data-scene aria-labelledby="privacy-title">
+      <div class="stage wrap">
+        <div class="privacy-copy">
+          <p class="eyebrow">{t.privacy.eyebrow}</p>
+          <h2 id="privacy-title" class="h2" set:html={t.privacy.h2} />
+          <p class="lede">{t.privacy.lede}</p>
+        </div>
+        <figure class="ledger" aria-label={t.privacy.ledgerLabel}>
+          <figcaption class="ledger-head">
+            <span data-scrub="h1:0.42,0.5">{t.privacy.head1}</span>
+            <span data-scrub="h2:0.56,0.64">{t.privacy.head2}</span>
+          </figcaption>
+          <ol class="raw">
+            {raw.map((x, k) => (
+              <li data-scrub={`in:${(0.02 + k * 0.025).toFixed(3)},${(0.12 + k * 0.025).toFixed(3)};c:${(0.4 + (raw.length - 1 - k) * 0.018).toFixed(3)},${(0.52 + (raw.length - 1 - k) * 0.018).toFixed(3)}`} style={`--k:${k}`}>
+                <span>{x.what}</span><span class="raw-how">{x.how}</span><b>{x.n}</b>
+              </li>
+            ))}
+          </ol>
+          <p class="sum" data-scrub="s:0.54,0.64"><span class="sum-tag">{t.privacy.uploadTag}</span><span>{t.privacy.upload}</span></p>
+          <p class="ledger-n" data-scrub="n:0.64,0.74"><span class="num">1</span>{t.privacy.unit}<small>{t.privacy.unitNote}</small></p>
+        </figure>
+      </div>
+    </section>
+    <section class="privacy-checks" aria-label={t.privacy.checksLabel}>
+      <ul class="checks wrap">
+        {t.privacy.checks.map((c, i) => <li data-reveal style={`--d:${i * 70}ms`}><Icon name="check" />{c}</li>)}
+      </ul>
+    </section>
+
+    <!-- 8. Price. -->
+    <section class="price" aria-labelledby="price-title">
+      <div class="wrap">
+        <div class="center" data-reveal>
+          <p class="eyebrow">{t.price.eyebrow}</p>
+          <h2 id="price-title" class="h2" set:html={t.price.h2} />
+        </div>
+        <div class="plans">
+          <div class="plan" data-reveal>
+            <h3>{t.price.freeName}</h3>
+            <p class="plan-price">{t.price.freePrice}</p>
+            <ul>{t.price.free.map((x) => <li>{x}</li>)}</ul>
+          </div>
+          <div class="plan plan-plus" data-reveal style="--d:90ms">
+            <h3>Pulseling Plus</h3>
+            <p class="plan-price">{t.price.plusPrice}</p>
+            <p class="muted">{t.price.plusTerms}</p>
+            <ul>{t.price.plus.map((x) => <li>{x}</li>)}</ul>
+          </div>
+        </div>
+        <p class="center muted small" data-reveal>{t.price.note}</p>
+      </div>
+    </section>
+
+    <!-- 9. FAQ. -->
+    <section class="faq" aria-labelledby="faq-title">
+      <div class="wrap narrow">
+        <h2 id="faq-title" class="h2" data-reveal>{t.faq.h2}</h2>
+        {t.faq.items.map((f) => (
+          <details data-reveal>
+            <summary>{f.q}<Icon name="plus" /></summary>
+            <p>{f.a}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+
+    <!-- 10. Waitlist. -->
+    <section class="join" id="join" data-tone="dark" aria-labelledby="join-title">
+      <div class="join-line" data-view data-scrub="d:0.08,0.5" aria-hidden="true"><svg viewBox="0 0 1000 100" preserveAspectRatio="none"><path d={mainline} pathLength="100" /></svg></div>
+      <div class="wrap narrow center" data-reveal>
+        <h2 id="join-title" class="h2" set:html={t.join.h2} />
+        <p class="lede">{t.join.lede}</p>
+        <form class="join-form" data-join novalidate>
+          <label class="sr" for="email">{t.join.label}</label>
+          <input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder={t.join.placeholder} required />
+          <button class="btn btn-primary" type="submit">{t.ui.join}</button>
+        </form>
+        <p class="join-msg" data-join-msg role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <span>© 2026 Pulseling · {t.foot.tagline}</span>
+      <span class="muted small">{t.foot.photos}{Object.values(PHOTOS).map((p) => p.author).join(t.foot.sep)}</span>
+    </div>
+  </footer>
+
+  <script type="application/json" id="i18n" set:html={JSON.stringify(t.client).replace(/</g, "\\u003c")} />
+  <script>
+    import "../scripts/site.ts";
+  </script>
+</body>
+</html>

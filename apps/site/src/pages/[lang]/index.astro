@@ -1,0 +1,10 @@
+---
+// Every language except English (which is at /). Copy: src/i18n/<lang>.ts. Page: src/components/Home.astro.
+import Home from "../../components/Home.astro";
+import { LANGS } from "../../i18n";
+
+export function getStaticPaths() {
+  return LANGS.filter((lang) => lang !== "en").map((lang) => ({ params: { lang } }));
+}
+---
+<Home />
