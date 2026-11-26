@@ -229,7 +229,8 @@ S1 在 Windows 上就能做（进度见上面"S1 进度"）；S2 开始需要 Ma
   - `PulselingService`：匿名注册、Keychain 存 token、带 Accept-Language、孵化、上传一天、读宠物。`Glance`：手表和小组件通过 App Group 共享的状态。
 - 手机端是一个"S2 检查"页，三个验证各有一个按钮：读取昨天并显示 JSON、记录后台唤醒的时间、注册 APNs 拿到 token，另有一个按钮连线上服务器。手表和小组件先只显示第几天和一句话。
 - `.github/workflows/apple.yml`：每次改动 `apps/apple` 都会在 GitHub 的 Mac 上跑 Swift 测试，并编译不签名的模拟器版本。另有手动触发的 TestFlight 上传任务，需要开发者账号和 5 个 secret（见文件开头）。
-- **还差：** 推到 GitHub 跑第一次 CI，修编译错误；有开发者账号（决定 8）以后传 TestFlight，装到真机上做三个验证。
+- **CI 已通过（2026-11-26 第 2 次）：** Swift 测试通过，手机 App、手表 App、手表小组件全部编译成功，手表 App 和小组件也正确装进了手机 App 里（模拟器版本，不签名）。
+- **还差（都要开发者账号或真机）：** 有开发者账号（决定 8）后填 5 个 secret，手动触发 TestFlight 任务；装到你的 iPhone 和手表上做三个验证：读昨天的数据和原型对照、睡一晚看后台唤醒延迟、拿 APNs 沙盒 token 试推送。
 
 **🟡 决定 7：Mac 怎么解决。** 云端 Mac 和 GitHub Actions 能编译、能上传 TestFlight，但**调试真手表**（断点、看日志、看 HealthKit 后台唤醒）需要手表和 Mac 在同一个网络里配对使用。建议买一台最便宜的 Mac mini；纯靠云端 Mac 的话，S4 的调试会非常慢。
 
