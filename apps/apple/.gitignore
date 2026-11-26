@@ -3,6 +3,7 @@
 *.xcworkspace/
 DerivedData/
 .build/
+Packages/PulselingKit/Sources/PulselingAPI/Generated/
 .swiftpm/
 Config/Local.xcconfig
 build/

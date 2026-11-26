@@ -219,6 +219,7 @@ S1 在 Windows 上就能做（进度见上面"S1 进度"）；S2 开始需要 Ma
 
 **S2 进度（2026-11-26，不用 Mac 的部分已写完，还没在 Mac 上编译过）：**
 
+- **第一次 CI（2026-11-26）：** Swift 测试在 Mac 上通过（4 组对照数据全对）；编译 App 时 OpenAPI 构建插件在 iOS 和 watchOS 两个平台各跑一次，生成的文件撞在一起，所以改成先用 `apps/apple/scripts/generate-api.sh` 生成客户端（不进 git），再编译。在 Mac 上打开工程前要先跑一次这个脚本。
 - `apps/apple/project.yml`：手机 App、手表 App、手表小组件三个 target，App Group、HealthKit（含后台唤醒）、推送沙盒的权限都已写好。Bundle 前缀和开发团队放在 `Config/Local.xcconfig`（不进 git），CI 从命令行传入。
 - `Packages/PulselingKit`：
   - `PulselingAPI`：用 swift-openapi-generator 在编译时根据 `openapi.json` 生成客户端；`openapi.json` 由 `apps/server/test/contract.test.ts` 导出并校验，接口一改测试就会失败（`UPDATE_OPENAPI=1 pnpm test` 更新）。服务器的每个接口都加了 operationId。
