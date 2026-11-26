@@ -1,0 +1,1444 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Pulseling API",
+    "version": "0.1.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "token"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "PetView": {
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-11-24",
+            "description": "The next day the server expects data for"
+          },
+          "dayNumber": {
+            "type": "integer"
+          },
+          "pet": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "evolution": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "condition": {
+            "type": "number"
+          },
+          "card": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "This morning's card; null before the first day is settled"
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "zh",
+              "en"
+            ],
+            "description": "Language of every text field in this view"
+          },
+          "line": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Something the pet wants to say first thing"
+          },
+          "short": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Watch-sized line"
+          },
+          "bossPending": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "example": "2026-11-24"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "date",
+              "type"
+            ]
+          },
+          "lastBoss": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {}
+          },
+          "lastBossName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wish": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "example": "2026-11-24"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "target": {
+                "type": "number"
+              },
+              "label": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "short": {
+                "type": "string"
+              },
+              "kept": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "date",
+              "kind",
+              "target",
+              "label",
+              "text",
+              "short"
+            ],
+            "description": "Today's optional wish"
+          },
+          "letters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "example": "2026-11-24"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "read": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "date",
+                "text",
+                "read"
+              ]
+            }
+          },
+          "feed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "example": "2026-11-24"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "date",
+                "text",
+                "kind"
+              ]
+            }
+          },
+          "chat": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "enum": [
+                    "me",
+                    "pet"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "text"
+              ]
+            },
+            "description": "Today's exchanges"
+          },
+          "replies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "label"
+              ]
+            },
+            "description": "The quick replies, for POST /v1/chat"
+          },
+          "memories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "example": "2026-11-24"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "date",
+                "text"
+              ]
+            }
+          },
+          "dex": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "dexNames": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Species id → name"
+          },
+          "collection": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "count"
+              ]
+            }
+          },
+          "loadout": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tactic": {
+            "type": "string"
+          },
+          "chatsLeft": {
+            "type": "integer"
+          },
+          "trial": {
+            "type": "string",
+            "enum": [
+              "none",
+              "active"
+            ]
+          },
+          "invite": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "talk",
+              "letter",
+              "evolve",
+              null
+            ],
+            "description": "Show a soft Plus invitation today (never blocks play)"
+          }
+        },
+        "required": [
+          "today",
+          "dayNumber",
+          "pet",
+          "evolution",
+          "condition",
+          "card",
+          "locale",
+          "line",
+          "short",
+          "bossPending",
+          "lastBoss",
+          "lastBossName",
+          "wish",
+          "letters",
+          "feed",
+          "chat",
+          "replies",
+          "memories",
+          "dex",
+          "dexNames",
+          "collection",
+          "loadout",
+          "tactic",
+          "chatsLeft",
+          "trial",
+          "invite"
+        ]
+      },
+      "NewGame": {
+        "type": "object",
+        "properties": {
+          "starter": {
+            "type": "string",
+            "enum": [
+              "grass",
+              "water",
+              "fire"
+            ]
+          },
+          "installDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-11-24",
+            "description": "The phone's local date at hatch"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DatedHealth"
+            },
+            "maxItems": 28,
+            "description": "Up to 28 days before installDate. Missing days count as not worn (Health access denied → send [])"
+          }
+        },
+        "required": [
+          "starter",
+          "installDate",
+          "history"
+        ]
+      },
+      "DatedHealth": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DayHealth"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "example": "2026-11-24"
+              }
+            },
+            "required": [
+              "date"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "DayHealth": {
+        "type": "object",
+        "properties": {
+          "worn": {
+            "type": "boolean",
+            "description": "Watch worn ~4 h in the daytime, or ≥ 1,500 steps on any device"
+          },
+          "steps": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 150000
+          },
+          "standHours": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "activeEnergyKcal": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 15000
+          },
+          "flightsClimbed": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "sleepMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "bedtimeMinutes": {
+            "type": "number",
+            "minimum": -720,
+            "maximum": 720,
+            "description": "First sleep relative to midnight, 23:30 → -30"
+          },
+          "deepSleepRatio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "nightHrvMs": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 400
+          },
+          "restingHr": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 250
+          },
+          "highHrZoneMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "intervalMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "strengthMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "highIntensityMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "cardioMinutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1440
+          },
+          "distanceKm": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "worn"
+        ],
+        "additionalProperties": false
+      },
+      "DayResponse": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-11-24"
+          },
+          "card": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {},
+            "description": "This morning's card; null before the first day is settled"
+          },
+          "view": {
+            "$ref": "#/components/schemas/PetView"
+          }
+        },
+        "required": [
+          "date",
+          "card",
+          "view"
+        ]
+      },
+      "DayUpload": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-11-24"
+          },
+          "health": {
+            "$ref": "#/components/schemas/DayHealth"
+          }
+        },
+        "required": [
+          "date",
+          "health"
+        ]
+      },
+      "Charge": {
+        "type": "object",
+        "properties": {
+          "charge": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "The watch tap, 0–1"
+          }
+        },
+        "required": [
+          "charge"
+        ]
+      },
+      "Chat": {
+        "type": "object",
+        "properties": {
+          "reply": {
+            "type": "string",
+            "enum": [
+              "pet",
+              "cheer",
+              "sleep-early",
+              "move",
+              "tired"
+            ]
+          }
+        },
+        "required": [
+          "reply"
+        ]
+      },
+      "Loadout": {
+        "type": "object",
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tactic": {
+            "type": "string",
+            "enum": [
+              "aggressive",
+              "balanced",
+              "cautious"
+            ]
+          }
+        },
+        "required": [
+          "skills",
+          "tactic"
+        ]
+      },
+      "Target": {
+        "type": "object",
+        "properties": {
+          "variant": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "pure",
+              "flying",
+              "fighting",
+              "electric",
+              "ground",
+              "shadow",
+              "dragon",
+              null
+            ]
+          }
+        },
+        "required": [
+          "variant"
+        ]
+      },
+      "Evolve": {
+        "type": "object",
+        "properties": {
+          "variant": {
+            "type": "string",
+            "enum": [
+              "pure",
+              "flying",
+              "fighting",
+              "electric",
+              "ground",
+              "shadow",
+              "dragon"
+            ]
+          }
+        },
+        "required": [
+          "variant"
+        ]
+      },
+      "Config": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "example": "2026-11-24"
+                },
+                "end": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                  "example": "2026-11-24"
+                }
+              },
+              "required": [
+                "id",
+                "text",
+                "start",
+                "end"
+              ]
+            }
+          },
+          "experiments": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "With a token: flag → this player's variant"
+          }
+        },
+        "required": [
+          "version",
+          "events"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/v1/accounts": {
+      "post": {
+        "operationId": "createAccount",
+        "summary": "Create an anonymous account",
+        "responses": {
+          "201": {
+            "description": "Keep the token in the Keychain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many new accounts from this network; retry in a minute",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/account": {
+      "delete": {
+        "operationId": "deleteAccount",
+        "summary": "Delete the account and every byte stored for it",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/game": {
+      "post": {
+        "operationId": "createGame",
+        "summary": "Hatch: pick an egg, send up to 28 days of history",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGame"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new pet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already hatched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getGame",
+        "summary": "Current pet, for the phone, watch and widgets",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/days": {
+      "post": {
+        "operationId": "uploadDay",
+        "summary": "Upload one finished day and get the morning card",
+        "description": "Upload days oldest first. Re-sending a settled day returns the same answer. Days skipped before `date` are settled as not worn. A day that was already settled as not worn can't be uploaded afterwards (409 day_closed).",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayUpload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicts with the current game",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/boss/fight": {
+      "post": {
+        "operationId": "fightBoss",
+        "summary": "Fight this week's boss (the watch tap)",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Charge"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fought",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No boss waiting today",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trial": {
+      "post": {
+        "operationId": "startTrial",
+        "summary": "Start the Plus trial",
+        "description": "Placeholder until StoreKit: marks the trial active. Later the trial comes from a verified App Store transaction.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trial active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat": {
+      "post": {
+        "operationId": "chat",
+        "summary": "Say one of today's 3 lines to the pet",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Chat"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No chats left today",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/letters/{date}/read": {
+      "post": {
+        "operationId": "readLetter",
+        "summary": "Mark a letter read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "date",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/loadout": {
+      "put": {
+        "operationId": "setLoadout",
+        "summary": "Skills and tactic for battles",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Loadout"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/target": {
+      "put": {
+        "operationId": "setTarget",
+        "summary": "Pick (or clear) the adult form to aim for",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Target"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/evolution": {
+      "post": {
+        "operationId": "evolve",
+        "summary": "Evolve now into one of the forms whose conditions are met",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Evolve"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PetView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pet yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not ready, or that form's conditions aren't met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config": {
+      "get": {
+        "operationId": "getConfig",
+        "summary": "Config version and the events running now or coming up (for banners)",
+        "responses": {
+          "200": {
+            "description": "Current config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/data": {
+      "get": {
+        "operationId": "getData",
+        "summary": "Everything uploaded, exactly as stored (the in-app data page)",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "uploads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string"
+                          },
+                          "health": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "filled": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "health",
+                          "filled"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "history",
+                    "uploads"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

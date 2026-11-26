@@ -1,0 +1,16 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "在 iPhone 上打开 Pulseling" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Pulseling on your iPhone" } }
+      }
+    },
+    "第 %lld 天" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Day %lld" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

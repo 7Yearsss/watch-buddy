@@ -203,6 +203,19 @@ iPhone ──WCSession.updateApplicationContext──▶ 手表 ──写 App Gr
 
 S1 在 Windows 上就能做（进度见上面"S1 进度"）；S2 开始需要 Mac。
 
+**S2 进度（2026-11-26，不用 Mac 的部分已写完，还没在 Mac 上编译过）：**
+
+- `apps/apple/project.yml`：手机 App、手表 App、手表小组件三个 target，App Group、HealthKit（含后台唤醒）、推送沙盒的权限都已写好。Bundle 前缀和开发团队放在 `Config/Local.xcconfig`（不进 git），CI 从命令行传入。
+- `Packages/PulselingKit`：
+  - `PulselingAPI`：用 swift-openapi-generator 在编译时根据 `openapi.json` 生成客户端；`openapi.json` 由 `apps/server/test/contract.test.ts` 导出并校验，接口一改测试就会失败（`UPDATE_OPENAPI=1 pnpm test` 更新）。服务器的每个接口都加了 operationId。
+  - `Health/`：`HealthReader` 只负责向 HealthKit 取数，`DayRules` 是纯函数，把取到的数据算成一行 DailyHealth。规则按上面"HealthKit 读什么"那张表实现。
+  - **约定（新定）：** 一行 DailyHealth 记当天的活动，加上当晚 18:00 到次日中午的睡眠。也就是第二天早上上传时已知的全部数据，下午小睡不算。
+  - 对照数据放在 `Tests/.../Fixtures/health-days.json`（4 种情况）：Swift 测试检查算出的结果等于预期；TS 测试检查预期结果能通过服务器校验，引擎也能结算。
+  - `PulselingService`：匿名注册、Keychain 存 token、带 Accept-Language、孵化、上传一天、读宠物。`Glance`：手表和小组件通过 App Group 共享的状态。
+- 手机端是一个"S2 检查"页，三个验证各有一个按钮：读取昨天并显示 JSON、记录后台唤醒的时间、注册 APNs 拿到 token，另有一个按钮连线上服务器。手表和小组件先只显示第几天和一句话。
+- `.github/workflows/apple.yml`：每次改动 `apps/apple` 都会在 GitHub 的 Mac 上跑 Swift 测试，并编译不签名的模拟器版本。另有手动触发的 TestFlight 上传任务，需要开发者账号和 5 个 secret（见文件开头）。
+- **还差：** 推到 GitHub 跑第一次 CI，修编译错误；有开发者账号（决定 8）以后传 TestFlight，装到真机上做三个验证。
+
 **🟡 决定 7：Mac 怎么解决。** 云端 Mac 和 GitHub Actions 能编译、能上传 TestFlight，但**调试真手表**（断点、看日志、看 HealthKit 后台唤醒）需要手表和 Mac 在同一个网络里配对使用。建议买一台最便宜的 Mac mini；纯靠云端 Mac 的话，S4 的调试会非常慢。
 
 **🟡 决定 8：Apple 开发者账号用个人还是公司。** App Store 上显示的卖家名称取决于这个选择，落地页和隐私政策里也要写同一个名字。注册和审核要时间，建议在 S1 期间就办。

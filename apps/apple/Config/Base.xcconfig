@@ -1,0 +1,7 @@
+// Shared settings for every target. Put your own team and bundle prefix in Config/Local.xcconfig (not in git):
+//   PULSELING_TEAM = ABCDE12345
+//   BUNDLE_PREFIX = com.yourname.pulseling
+// CI passes both on the xcodebuild command line instead.
+BUNDLE_PREFIX = app.pulseling
+PULSELING_TEAM =
+#include? "Local.xcconfig"

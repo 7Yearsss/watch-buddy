@@ -1,0 +1,6 @@
+# swift-openapi-generator builds the client from openapi.json (exported by apps/server/test/contract.test.ts).
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic

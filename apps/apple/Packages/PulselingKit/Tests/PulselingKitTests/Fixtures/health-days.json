@@ -1,0 +1,103 @@
+[
+  {
+    "name": "worn all day and slept with the watch",
+    "input": {
+      "date": "2026-11-24",
+      "steps": 9876.4,
+      "activeEnergyKcal": 512.6,
+      "flightsClimbed": 7,
+      "distanceKm": 7.4567,
+      "exerciseMinutes": 32.4,
+      "standHours": 11,
+      "restingHr": 58.3,
+      "heartRate": [
+        { "minute": 420, "value": 70 }, { "minute": 435, "value": 70 }, { "minute": 450, "value": 70 }, { "minute": 465, "value": 70 },
+        { "minute": 480, "value": 70 }, { "minute": 495, "value": 70 }, { "minute": 510, "value": 70 }, { "minute": 525, "value": 70 },
+        { "minute": 540, "value": 70 }, { "minute": 555, "value": 70 }, { "minute": 570, "value": 70 }, { "minute": 585, "value": 70 },
+        { "minute": 600, "value": 70 }, { "minute": 615, "value": 70 }, { "minute": 630, "value": 70 }, { "minute": 645, "value": 70 },
+        { "minute": 660, "value": 70 }, { "minute": 675, "value": 70 }, { "minute": 690, "value": 70 }, { "minute": 705, "value": 70 },
+        { "minute": 720, "value": 70 },
+        { "minute": 1080, "value": 160 }, { "minute": 1082, "value": 160 }, { "minute": 1084, "value": 160 },
+        { "minute": 1086, "value": 160 }, { "minute": 1088, "value": 160 }, { "minute": 1090, "value": 160 }
+      ],
+      "hrv": [{ "minute": 900, "value": 20 }, { "minute": 1450, "value": 40 }, { "minute": 1600, "value": 50 }, { "minute": 1800, "value": 60 }],
+      "sleep": [
+        { "stage": "inBed", "start": 1390, "end": 1880 },
+        { "stage": "core", "start": 1400, "end": 1500 },
+        { "stage": "unspecified", "start": 1400, "end": 1500 },
+        { "stage": "deep", "start": 1500, "end": 1560 },
+        { "stage": "core", "start": 1560, "end": 1650 },
+        { "stage": "rem", "start": 1650, "end": 1700 },
+        { "stage": "awake", "start": 1700, "end": 1710 },
+        { "stage": "core", "start": 1710, "end": 1800 },
+        { "stage": "deep", "start": 1800, "end": 1830 },
+        { "stage": "rem", "start": 1830, "end": 1870 }
+      ],
+      "workouts": [
+        { "activity": "running", "start": 1080, "end": 1110 },
+        { "activity": "traditionalStrengthTraining", "start": 1140, "end": 1165 },
+        { "activity": "highIntensityIntervalTraining", "start": 600, "end": 612 },
+        { "activity": "walking", "start": 700, "end": 760 }
+      ]
+    },
+    "expected": {
+      "date": "2026-11-24", "worn": true, "steps": 9876, "standHours": 11, "activeEnergyKcal": 513, "flightsClimbed": 7,
+      "sleepMinutes": 460, "bedtimeMinutes": -40, "deepSleepRatio": 0.2, "nightHrvMs": 50, "restingHr": 58,
+      "highHrZoneMinutes": 10, "intervalMinutes": 12, "strengthMinutes": 25, "highIntensityMinutes": 32, "cardioMinutes": 30, "distanceKm": 7.46
+    }
+  },
+  {
+    "name": "charges the watch at night: no sleep data, worn by heart-rate coverage",
+    "input": {
+      "date": "2026-11-25",
+      "steps": 6200,
+      "activeEnergyKcal": 300,
+      "flightsClimbed": 3,
+      "distanceKm": 4.2,
+      "exerciseMinutes": 10,
+      "standHours": 9,
+      "restingHr": 62,
+      "heartRate": [
+        { "minute": 540, "value": 75 }, { "minute": 555, "value": 75 }, { "minute": 570, "value": 75 }, { "minute": 585, "value": 75 },
+        { "minute": 600, "value": 75 }, { "minute": 615, "value": 75 }, { "minute": 630, "value": 75 }, { "minute": 645, "value": 75 },
+        { "minute": 660, "value": 75 }, { "minute": 675, "value": 75 }, { "minute": 690, "value": 75 }, { "minute": 705, "value": 75 },
+        { "minute": 720, "value": 75 }, { "minute": 735, "value": 75 }, { "minute": 750, "value": 75 }, { "minute": 765, "value": 75 },
+        { "minute": 780, "value": 75 }
+      ],
+      "hrv": [],
+      "sleep": [],
+      "workouts": []
+    },
+    "expected": {
+      "date": "2026-11-25", "worn": true, "steps": 6200, "standHours": 9, "activeEnergyKcal": 300, "flightsClimbed": 3, "restingHr": 62,
+      "highHrZoneMinutes": 0, "intervalMinutes": 0, "strengthMinutes": 0, "highIntensityMinutes": 10, "cardioMinutes": 0, "distanceKm": 4.2
+    }
+  },
+  {
+    "name": "watch in a drawer, phone barely moved: not worn",
+    "input": { "date": "2026-11-26", "steps": 850, "heartRate": [], "hrv": [], "sleep": [], "workouts": [] },
+    "expected": { "date": "2026-11-26", "worn": false, "steps": 850, "intervalMinutes": 0, "strengthMinutes": 0, "cardioMinutes": 0 }
+  },
+  {
+    "name": "late night, afternoon nap, typed-in entries and a span past noon",
+    "input": {
+      "date": "2026-11-27",
+      "steps": 15000,
+      "heartRate": [],
+      "hrv": [],
+      "sleep": [
+        { "stage": "core", "start": 840, "end": 870 },
+        { "stage": "unspecified", "start": 1200, "end": 1500, "manual": true },
+        { "stage": "core", "start": 1500, "end": 1600 },
+        { "stage": "deep", "start": 1600, "end": 1660 },
+        { "stage": "core", "start": 1660, "end": 1980 },
+        { "stage": "core", "start": 2100, "end": 2220 }
+      ],
+      "workouts": [{ "activity": "running", "start": 600, "end": 700, "manual": true }]
+    },
+    "expected": {
+      "date": "2026-11-27", "worn": true, "steps": 15000, "sleepMinutes": 540, "bedtimeMinutes": 60, "deepSleepRatio": 0.11,
+      "intervalMinutes": 0, "strengthMinutes": 0, "cardioMinutes": 0
+    }
+  }
+]

@@ -157,7 +157,7 @@ export function createApp(deps: Deps) {
   // ───── accounts ─────
 
   app.openapi(
-    createRoute({ method: "post", path: "/v1/accounts", summary: "Create an anonymous account", responses: { 201: json(Account, "Keep the token in the Keychain"), 429: err("Too many new accounts from this network; retry in a minute") } }),
+    createRoute({ method: "post", path: "/v1/accounts", operationId: "createAccount", summary: "Create an anonymous account", responses: { 201: json(Account, "Keep the token in the Keychain"), 429: err("Too many new accounts from this network; retry in a minute") } }),
     async (c) => {
       const caller = c.req.header("cf-connecting-ip") ?? "local";
       if (deps.allowNewAccount && !(await deps.allowNewAccount(`accounts:${caller}`))) throw new ApiFailure(429, "slow_down", "Too many new accounts from this network; try again in a minute");
@@ -169,7 +169,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "delete", path: "/v1/account", summary: "Delete the account and every byte stored for it", ...authed, responses: { 204: { description: "Deleted" }, 401: errors[401] } }),
+    createRoute({ method: "delete", path: "/v1/account", operationId: "deleteAccount", summary: "Delete the account and every byte stored for it", ...authed, responses: { 204: { description: "Deleted" }, 401: errors[401] } }),
     async (c) => {
       await store.deleteUser(c.get("userId"));
       return c.body(null, 204);
@@ -182,6 +182,7 @@ export function createApp(deps: Deps) {
     createRoute({
       method: "post",
       path: "/v1/game",
+      operationId: "createGame",
       summary: "Hatch: pick an egg, send up to 28 days of history",
       ...authed,
       request: body(NewGame),
@@ -207,7 +208,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "get", path: "/v1/game", summary: "Current pet, for the phone, watch and widgets", ...authed, responses: { 200: json(PetView, "Current view"), 401: errors[401], 404: errors[404] } }),
+    createRoute({ method: "get", path: "/v1/game", operationId: "getGame", summary: "Current pet, for the phone, watch and widgets", ...authed, responses: { 200: json(PetView, "Current view"), 401: errors[401], 404: errors[404] } }),
     async (c) => {
       const { state } = await load(c.get("userId"));
       return c.json(await rules(() => petView(state, c.get("locale"))), 200);
@@ -218,6 +219,7 @@ export function createApp(deps: Deps) {
     createRoute({
       method: "post",
       path: "/v1/days",
+      operationId: "uploadDay",
       summary: "Upload one finished day and get the morning card",
       description:
         "Upload days oldest first. Re-sending a settled day returns the same answer. Days skipped before `date` are settled as not worn. " +
@@ -260,7 +262,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "post", path: "/v1/boss/fight", summary: "Fight this week's boss (the watch tap)", ...authed, request: body(Charge), responses: { 200: json(PetView, "Fought"), 401: errors[401], 404: errors[404], 409: err("No boss waiting today") } }),
+    createRoute({ method: "post", path: "/v1/boss/fight", operationId: "fightBoss", summary: "Fight this week's boss (the watch tap)", ...authed, request: body(Charge), responses: { 200: json(PetView, "Fought"), 401: errors[401], 404: errors[404], 409: err("No boss waiting today") } }),
     async (c) => {
       const { charge } = c.req.valid("json");
       return c.json(
@@ -277,6 +279,7 @@ export function createApp(deps: Deps) {
     createRoute({
       method: "post",
       path: "/v1/trial",
+      operationId: "startTrial",
       summary: "Start the Plus trial",
       description: "Placeholder until StoreKit: marks the trial active. Later the trial comes from a verified App Store transaction.",
       ...authed,
@@ -286,7 +289,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "post", path: "/v1/chat", summary: "Say one of today's 3 lines to the pet", ...authed, request: body(ChatBody), responses: { 200: json(PetView, "Answered"), 401: errors[401], 404: errors[404], 409: err("No chats left today") } }),
+    createRoute({ method: "post", path: "/v1/chat", operationId: "chat", summary: "Say one of today's 3 lines to the pet", ...authed, request: body(ChatBody), responses: { 200: json(PetView, "Answered"), 401: errors[401], 404: errors[404], 409: err("No chats left today") } }),
     async (c) => {
       const { reply } = c.req.valid("json");
       return c.json(
@@ -300,7 +303,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "post", path: "/v1/letters/{date}/read", summary: "Mark a letter read", ...authed, request: { params: z.object({ date: z.string() }) }, responses: { 200: json(PetView, "Marked"), 401: errors[401], 404: errors[404] } }),
+    createRoute({ method: "post", path: "/v1/letters/{date}/read", operationId: "readLetter", summary: "Mark a letter read", ...authed, request: { params: z.object({ date: z.string() }) }, responses: { 200: json(PetView, "Marked"), 401: errors[401], 404: errors[404] } }),
     async (c) => {
       const { date } = c.req.valid("param");
       return c.json(await viewAfter(c.get("locale"), c.get("userId"), (s) => readLetter(s, date)), 200);
@@ -308,7 +311,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "put", path: "/v1/loadout", summary: "Skills and tactic for battles", ...authed, request: body(LoadoutBody), responses: { 200: json(PetView, "Saved"), 401: errors[401], 404: errors[404], 422: errors[422] } }),
+    createRoute({ method: "put", path: "/v1/loadout", operationId: "setLoadout", summary: "Skills and tactic for battles", ...authed, request: body(LoadoutBody), responses: { 200: json(PetView, "Saved"), 401: errors[401], 404: errors[404], 422: errors[422] } }),
     async (c) => {
       const { skills, tactic } = c.req.valid("json");
       return c.json(
@@ -323,7 +326,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "put", path: "/v1/target", summary: "Pick (or clear) the adult form to aim for", ...authed, request: body(TargetBody), responses: { 200: json(PetView, "Saved"), 401: errors[401], 404: errors[404] } }),
+    createRoute({ method: "put", path: "/v1/target", operationId: "setTarget", summary: "Pick (or clear) the adult form to aim for", ...authed, request: body(TargetBody), responses: { 200: json(PetView, "Saved"), 401: errors[401], 404: errors[404] } }),
     async (c) => {
       const { variant } = c.req.valid("json");
       return c.json(await viewAfter(c.get("locale"), c.get("userId"), (s) => setTarget(s, variant ?? undefined)), 200);
@@ -331,7 +334,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "post", path: "/v1/evolution", summary: "Evolve now into one of the forms whose conditions are met", ...authed, request: body(EvolveBody), responses: { 200: json(PetView, "Evolved"), 401: errors[401], 404: errors[404], 409: err("Not ready, or that form's conditions aren't met") } }),
+    createRoute({ method: "post", path: "/v1/evolution", operationId: "evolve", summary: "Evolve now into one of the forms whose conditions are met", ...authed, request: body(EvolveBody), responses: { 200: json(PetView, "Evolved"), 401: errors[401], 404: errors[404], 409: err("Not ready, or that form's conditions aren't met") } }),
     async (c) => {
       const { variant } = c.req.valid("json");
       return c.json(
@@ -347,7 +350,7 @@ export function createApp(deps: Deps) {
   );
 
   app.openapi(
-    createRoute({ method: "get", path: "/v1/config", summary: "Config version and the events running now or coming up (for banners)", responses: { 200: json(PublicConfig, "Current config") } }),
+    createRoute({ method: "get", path: "/v1/config", operationId: "getConfig", summary: "Config version and the events running now or coming up (for banners)", responses: { 200: json(PublicConfig, "Current config") } }),
     async (c) => {
       const conf = await config();
       const today = utcToday();
@@ -366,6 +369,7 @@ export function createApp(deps: Deps) {
     createRoute({
       method: "get",
       path: "/v1/data",
+      operationId: "getData",
       summary: "Everything uploaded, exactly as stored (the in-app data page)",
       ...authed,
       responses: { 200: json(z.object({ history: z.array(z.record(z.string(), z.unknown())), uploads: z.array(z.object({ date: z.string(), health: z.record(z.string(), z.unknown()), filled: z.boolean() })) }), "Stored data"), 401: errors[401] },
