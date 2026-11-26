@@ -1,4 +1,6 @@
 import type { DailyHealth } from "@pulseling/engine";
+import { duration, msg, type Msg } from "./i18n";
+import { zh } from "./copy/zh";
 
 /**
  * Daily wishes (07 §2): an optional one-a-day ask in the pet's voice. Targets are relative to the player's own
@@ -11,15 +13,16 @@ export interface Wish {
   date: string;
   kind: WishKind;
   target: number;
-  text: string;
+  text: Msg;
   /** Watch-sized (≈10 chars). */
-  short: string;
+  short: Msg;
   kept?: boolean;
   /** What keeping it gave: growth only, or growth + a luckier morning. */
   reward?: "growth" | "luck";
 }
 
-export const WISH_LABEL: Record<WishKind, string> = { wear: "陪我睡一晚", walk: "多走走", early: "早点睡", sleep: "睡够", move: "动一动", stairs: "爬爬楼" };
+/** Chinese labels for the prototype; other surfaces render msg(`wish.<kind>`). */
+export const WISH_LABEL = Object.fromEntries((["wear", "walk", "early", "sleep", "move", "stairs"] as const).map((k) => [k, zh[`wish.${k}`]!])) as Record<WishKind, string>;
 
 /** Chance that a morning brings a wish at all; quiet days keep it from feeling like homework. */
 export const WISH_CHANCE = 0.7;
@@ -52,38 +55,38 @@ function base(history: DailyHealth[], f: (d: DailyHealth) => number | undefined)
   return xs.length >= 5 ? median(xs) : undefined;
 }
 
-interface Candidate { kind: WishKind; target: number; text: string; short: string }
+interface Candidate { kind: WishKind; target: number; text: Msg; short: Msg }
+const ask = (kind: WishKind, target: number, p: Record<string, Msg | string | number>): Candidate => ({ kind, target, text: msg(`wish.${kind}.text`, p), short: msg(`wish.${kind}.short`, p) });
 
 function candidates(history: DailyHealth[]): Candidate[] {
   const out: Candidate[] = [];
   const steps = base(history, (d) => d.steps);
   const walk = Math.max(3000, round(Math.max((steps ?? 4000) * 1.1, (steps ?? 4000) + 500), 100));
-  out.push({ kind: "walk", target: walk, text: `今天想多出去走走，我们走到 ${walk} 步好不好？`, short: `想走${walk}步` });
+  out.push(ask("walk", walk, { n: walk }));
 
   const bed = base(history, (d) => d.bedtimeMinutes);
   if (bed !== undefined) {
     const target = bed - 15;
-    out.push({ kind: "early", target, text: `今晚想早点睡，${clock(target)} 前一起躺下好吗？`, short: `${clock(target)}前睡` });
+    out.push(ask("early", target, { clock: clock(target) }));
   }
   const sleep = base(history, (d) => d.sleepMinutes);
   if (sleep !== undefined && sleep < 480) {
     const target = Math.min(540, round(sleep + 15, 5));
-    const hm = `${Math.floor(target / 60)} 小时${target % 60 ? ` ${target % 60} 分` : ""}`;
-    out.push({ kind: "sleep", target, text: `今晚想多睡一会儿，睡够 ${hm}吧`, short: `睡够${Math.round(target / 6) / 10}小时` });
+    out.push(ask("sleep", target, { d: duration(target), h: Math.round(target / 6) / 10 }));
   }
   const moved = base(history, activeMinutes);
   const move = Math.max(15, round((moved ?? 0) + 5, 5));
-  out.push({ kind: "move", target: move, text: `想听你心跳快一点！今天运动 ${move} 分钟可以吗？`, short: `运动${move}分钟` });
+  out.push(ask("move", move, { n: move }));
 
   const flights = base(history, (d) => d.flightsClimbed);
   const stairs = Math.max(5, Math.round((flights ?? 2) + 2));
-  out.push({ kind: "stairs", target: stairs, text: `今天想爬高高，我们爬 ${stairs} 层楼吧`, short: `爬${stairs}层楼` });
+  out.push(ask("stairs", stairs, { n: stairs }));
   return out;
 }
 
 /** The first night's onboarding ask (02: "戴着手表睡一晚"). */
 export function firstWish(date: string): Wish {
-  return { date, kind: "wear", target: 1, text: "今晚戴着手表睡觉吧，明天早上我有东西给你看", short: "戴表陪我睡" };
+  return { date, ...ask("wear", 1, {}) };
 }
 
 /** Maybe a wish for `date`. Deterministic per user and day; never the same kind within 3 days. */
@@ -114,10 +117,8 @@ export function wishReward(userId: string, w: Wish): "growth" | "luck" {
 }
 
 /** What the pet says the next morning. Missing a wish is fine and is said kindly. */
-export function wishResultLine(w: Wish): { text: string; short: string } {
-  if (w.kept)
-    return w.reward === "luck"
-      ? { text: `你实现了我的心愿「${WISH_LABEL[w.kind]}」！作为谢礼，今早的运气变好了`, short: "心愿实现！好运+" }
-      : { text: `你实现了我的心愿「${WISH_LABEL[w.kind]}」！成长值 +${WISH_GROWTH}`, short: "心愿实现啦！" };
-  return { text: `心愿「${WISH_LABEL[w.kind]}」没实现也没关系，能陪着你就很开心`, short: "没关系～" };
+export function wishResultLine(w: Wish): { text: Msg; short: Msg } {
+  const label = msg(`wish.${w.kind}`);
+  const key = w.kept ? (w.reward === "luck" ? "wish.kept.luck" : "wish.kept.growth") : "wish.missed";
+  return { text: msg(key, { label, n: WISH_GROWTH }), short: msg(`${key}.short`) };
 }

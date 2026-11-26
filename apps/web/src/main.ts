@@ -1,5 +1,6 @@
 import {
   addDays,
+  daysBetween,
   effectiveness,
   getSkill,
   isBossDay,
@@ -45,6 +46,8 @@ import {
   setLoadout,
   setTarget,
   startTrial,
+  trialInvite,
+  type TrialInvite,
   status,
   type BattleReport,
   type DayInput,
@@ -73,9 +76,12 @@ import { queueShow, setReducedMotion } from "./shows";
 import { renderShareCard, type ShareCard } from "./share";
 import { dayPhase, fmtClock, sleepWindow, type DayPhase } from "@pulseling/game";
 import { CHANNEL_DEFAULT, CHANNEL_NAME, noticesFor, smartStackRelevance, type Notice } from "@pulseling/game";
-import { HINT, ITEMS, MOVE_NAME, SURPRISE_ICON, TREASURE_ITEMS, type IdleMove } from "@pulseling/game";
+import { HINT, ITEMS, itemName, MOVE_NAME, SURPRISE_ICON, TREASURE_ITEMS, type IdleMove } from "@pulseling/game";
+// Game text is stored as copy keys (decision 6); the prototype reads it in Chinese.
+import { t } from "@pulseling/game";
 import { WISH_LABEL, type Wish } from "@pulseling/game";
 import { morph, setMorphReducedMotion } from "./morph";
+import { remote, serverBase, type LiveEvent } from "./remote";
 
 type Tab = "today" | "pet" | "dex" | "battle" | "data";
 type SliderKey = "steps" | "sleepHours" | "bedtime" | "cardio" | "strength" | "hiit" | "deep";
@@ -131,7 +137,16 @@ function toDayInput(v: Sliders): DayInput {
   };
 }
 
-let state: GameState | null = load();
+/** In server mode (?server=…) the pet lives on apps/server; it's pulled in once the page is up. */
+let state: GameState | null = serverBase ? null : load();
+/** A request to the server is in flight; actions that change the game wait for it. */
+let serverBusy = false;
+/** Server mode: limited-time events from the remote config (shown as a banner while they run). */
+let liveEvents: LiveEvent[] = [];
+/** Server mode: the remote config version and this player's A/B groups (debug panel only). */
+let liveConfig: { version: string; experiments: Record<string, string> } | null = null;
+const refreshConfig = () =>
+  remote.config().then((c) => { liveEvents = c.events; liveConfig = { version: c.version, experiments: c.experiments ?? {} }; render(); }, () => undefined);
 let tab: Tab = "today";
 /** First run: pick an egg → why we read Health data (priming) → system sheet → reading 28 days → hatch. */
 let hatchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -198,7 +213,6 @@ let aod = false;
 
 /** What the watch pet is doing right now: tapped → happy, just spoke → talk, otherwise its mood. */
 function liveAction(s: GameState): SpriteAction {
-  if (s.trial === "offered") return "sleep";
   const phase = phaseOf(s);
   if (phase === "sleep" && !heart) return "sleep";
   if (phase === "winddown" && !heart && !bubble) return "sleepy";
@@ -210,7 +224,9 @@ function liveAction(s: GameState): SpriteAction {
 let bubble: string | null = null;
 let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 let seenMorning = state?.morning?.date ?? null;
-let paywallHidden = false;
+/** The Plus invitation the player put away (so it doesn't come back the same day), and when one was last shown. */
+let invitePutAway: { date: string; invite: TrialInvite } | null = null;
+let lastInviteShown: string | null = null;
 let openLetter: string | null = null;
 /** Watch version of the morning card: 3 screens, ~1s each, tap to advance (07 §1). */
 let watchCard: { card: MorningCard; step: number } | null = null;
@@ -262,10 +278,9 @@ function currentMood(s: GameState) {
 }
 
 function watchLine(s: GameState): string {
-  if (s.trial === "offered") return "zzz……（冬眠中，开启试用叫醒它）";
-  if (!s.morning) return hatchLine(s.pet.personality, s.facts);
+  if (!s.morning) return t(hatchLine(s.pet.personality, s.facts));
   const m = s.morning;
-  return morningLine(s.pet.personality, m.sleepMinutes, currentMood(s), m.encounter, m.captured, speciesName(m.trial.opponentName));
+  return t(morningLine(s.pet.personality, m.sleepMinutes, currentMood(s), m.encounter, m.captured, m.trial.opponentName));
 }
 
 function renderStart(): string {
@@ -339,8 +354,7 @@ const SHORT_GREETING: Record<PetState["personality"], string> = { genki: "元气
 
 /** One short line for the watch bubble (about 10 characters). The full sentence lives on the phone. */
 function shortLine(s: GameState): string {
-  if (s.trial === "offered") return "zzz……";
-  if (s.pendingShort) return s.pendingShort;
+  if (s.pendingShort) return t(s.pendingShort);
   if (s.letters[0] && !s.letters[0].read && s.letters[0].date === s.today) return "给你写了封信！";
   const st = status(s);
   if (st.ready && !st.auto) return "我好像要进化了！";
@@ -352,9 +366,9 @@ function shortLine(s: GameState): string {
   if (m.encounter && m.newSpecies) return `收服了${name}！`;
   if (m.encounter && m.captured) return `又碰到${name}了`;
   if (m.encounter) return `${name}跑掉了…`;
-  if (m.surprise && m.date === s.today) return m.surprise.short;
+  if (m.surprise && m.date === s.today) return t(m.surprise.short);
   const w = openWish(s);
-  if (w && phaseOf(s) !== "sleep") return w.short;
+  if (w && phaseOf(s) !== "sleep") return t(w.short);
   const phase = phaseOf(s);
   if (phase === "sleep") return "zzz……";
   if (phase === "winddown") return "快到睡觉时间啦";
@@ -367,7 +381,7 @@ function shortLine(s: GameState): string {
 /** Something worth a look: evolution waiting for a choice, or an unread letter. */
 function needsAttention(s: GameState): boolean {
   const st = status(s);
-  return s.trial !== "offered" && ((st.ready && !st.auto) || !!s.bossPending || s.letters.some((l) => !l.read));
+  return (st.ready && !st.auto) || !!s.bossPending || s.letters.some((l) => !l.read);
 }
 
 function showBubble(text: string) {
@@ -398,7 +412,7 @@ const phaseOf = (s: GameState): DayPhase => dayPhase(nowMinutes(), sleepWindow(s
 
 function renderWatch(s: GameState): string {
   const st = status(s);
-  const asleep = s.trial === "offered";
+  const asleep = false;
   const nearEvolution = st.threshold > 0 && st.progress / st.threshold >= 0.85;
   const spec = { ...petSpec(s.pet, undefined, undefined, asleep ? "sleepy" : currentMood(s)), glow: nearEvolution && !asleep };
   if (aod) {
@@ -438,13 +452,13 @@ function watchToday(s: GameState, st: ReturnType<typeof status>): string {
   const last = s.results[s.results.length - 1];
   const m = s.morning;
   const wo = freshWorkout();
-  const line = wo ? `刚运动完！明早${WORKOUT_STAT[wo.kind]}会涨` : !m ? "今天还没开奖" : m.encounter ? (m.newSpecies ? `收服了${speciesName(m.trial.opponentName)}` : `遇到${speciesName(m.trial.opponentName)}`) : m.surprise ? m.surprise.short : "附近很安静";
+  const line = wo ? `刚运动完！明早${WORKOUT_STAT[wo.kind]}会涨` : !m ? "今天还没开奖" : m.encounter ? (m.newSpecies ? `收服了${speciesName(m.trial.opponentName)}` : `遇到${speciesName(m.trial.opponentName)}`) : m.surprise ? t(m.surprise.short) : "附近很安静";
   const bossIn = daysUntilBoss(s);
   return `<div class="wp">
     <div class="wc-ring" style="--from:${p};--to:${p}">${canvas(petSpec(s.pet, undefined, undefined, currentMood(s)))}</div>
     <div class="wp-big">${s.pet.stage === "adult" ? "成熟体" : `进化 <span data-num>${pct(p)}</span>`}</div>
     <div class="wp-line">${last ? `昨天 +${Math.round(last.gain)}` : "第一天"} · ${line}</div>
-    ${openWish(s) ? `<div class="wp-dim">心愿：${openWish(s)!.short}</div>` : ""}
+    ${openWish(s) ? `<div class="wp-dim">心愿：${t(openWish(s)!.short)}</div>` : ""}
     <div class="wp-dim">Boss ${bossIn === 0 ? "就是今天" : `还有 ${bossIn} 天`}</div>
   </div>`;
 }
@@ -566,7 +580,7 @@ function cornerArc(p: number): string {
 function renderFaces(s: GameState, st: ReturnType<typeof status>): string {
   const progress = st.threshold ? Math.min(1, st.progress / st.threshold) : 1;
   const deg = Math.round(progress * 360);
-  const head = petSpec(s.pet, undefined, undefined, s.trial === "offered" ? "sleepy" : currentMood(s));
+  const head = petSpec(s.pet, undefined, undefined, currentMood(s));
   const evo = s.pet.stage === "adult" ? "成熟体" : `进化 ${pct(progress)}`;
   const attn = needsAttention(s) ? "！" : "";
   const bossIn = daysUntilBoss(s);
@@ -622,8 +636,10 @@ function renderToday(s: GameState): string {
   const m = s.morning;
   const bossToday = s.boss && s.boss.date === s.today ? s.boss : null;
   return `<div class="stack">
+    ${renderEvents(s)}
     ${renderMorningCard(s)}
-    ${s.pendingLine ? `<div class="card highlight"><p>${s.pendingLine}</p></div>` : ""}
+    ${renderInvite(s)}
+    ${s.pendingLine ? `<div class="card highlight"><p>${t(s.pendingLine)}</p></div>` : ""}
     ${renderWish(s)}
     ${s.letters.length ? `<div class="card ${s.letters[0].read ? "" : "highlight"}"><h2>来信 ${s.letters.some((l) => !l.read) ? '<span class="pill">未读</span>' : ""}</h2>
       ${s.letters.slice(0, 4).map((l) => `<div class="row"><span>${l.date.slice(5)} 的周信</span><button class="small" data-act="letter" data-v="${l.date}">${l.read ? "再看看" : "打开"}</button></div>`).join("")}
@@ -631,7 +647,7 @@ function renderToday(s: GameState): string {
     <div class="card"><h2>今早的试炼</h2>
       ${
         !m
-          ? `<p>${hatchLine(s.pet.personality, s.facts)}</p><p class="muted">在「假健康数据」里设好今天的数据，然后点"过完这一天"。</p>`
+          ? `<p>${t(hatchLine(s.pet.personality, s.facts))}</p><p class="muted">在「假健康数据」里设好今天的数据，然后点"过完这一天"。</p>`
           : `<p>${watchLine(s)}</p>
         ${m.encounter ? `<h3>遇到野怪</h3>${battleSummary(m.trial, false)}${m.newSpecies ? `<p class="good">收服成功，图鉴已解锁！${m.newSkill ? `学会了 ${skillName(m.newSkill)}。` : ""}</p>` : m.captured ? `<p class="muted">已经收服过了，得到闪光碎片。</p>` : `<p class="muted">没打赢，图鉴里留下了剪影。</p>`}`
           : `<p class="muted">今天没遇到野怪（${s.daysSinceEncounter} 天没遇到了，连续 4 天没遇到第 5 天必遇）。每日试炼对手是训练假人。</p>${battleSummary(m.trial, false)}`}`
@@ -640,19 +656,19 @@ function renderToday(s: GameState): string {
     ${s.bossPending ? `<div class="card highlight"><h2>这周的 Boss 来了！</h2><p>${TYPE_NAME[s.bossPending.type as ElementType]}系 Boss 今天一整天都在。手表上点一下开打（开打前蓄力，最多 +6% 伤害）；今天没打，明天会自动打。</p><button class="primary" data-act="boss">现在开打</button></div>` : ""}
     ${bossToday ? `<div class="card"><h2>周 Boss</h2>${battleSummary(bossToday, true)}</div>` : ""}
     ${renderChat(s)}
-    <div class="card"><h2>动态</h2><ul class="feed">${s.feed.slice(0, 12).map((f) => `<li><span class="muted">${f.date.slice(5)}</span> ${f.text}</li>`).join("")}</ul></div>
+    <div class="card"><h2>动态</h2><ul class="feed">${s.feed.slice(0, 12).map((f) => `<li><span class="muted">${f.date.slice(5)}</span> ${t(f.text)}</li>`).join("")}</ul></div>
   </div>`;
 }
 
 /** Today's open wish, if any. */
-const openWish = (s: GameState): Wish | undefined => (s.trial === "offered" ? undefined : s.wishes.find((w) => w.date === s.today && w.kept === undefined));
+const openWish = (s: GameState): Wish | undefined => s.wishes.find((w) => w.date === s.today && w.kept === undefined);
 
 function renderWish(s: GameState): string {
   const w = openWish(s);
   const kept = s.wishes.filter((x) => x.kept).length;
   if (!w) return "";
   return `<div class="card"><h2>今天的小心愿 <span class="pill">${WISH_LABEL[w.kind]}</span></h2>
-    <p>${w.text}</p>
+    <p>${t(w.text)}</p>
     <p class="muted" style="font-size:12px">可选的，没做到也没关系，什么都不会扣。做到了明早有成长值，偶尔还会让第二天更容易遇到野怪。难度按你最近两周自己的水平定。${kept ? `已经实现过 ${kept} 个心愿。` : ""}</p>
   </div>`;
 }
@@ -660,11 +676,11 @@ function renderWish(s: GameState): string {
 function renderChat(s: GameState): string {
   const left = chatsLeft(s);
   const today = s.chat.log.filter((l) => l.date === s.today);
-  const off = left <= 0 || s.trial === "offered" ? "disabled" : "";
+  const off = left <= 0 ? "disabled" : "";
   return `<div class="card"><h2>跟它说句话 ${off ? "" : `<span class="muted" style="font-size:12px;font-weight:400">今天还能说 <span data-num>${left}</span>/${CHATS_PER_DAY} 句</span>`}</h2>
-    <div class="chat">${today.map((l) => `<div class="msg ${l.from}">${l.text}</div>`).join("") || '<div class="muted">每天可以跟它说 3 句话。说出口的承诺它会记得，第二天对照你的数据。</div>'}</div>
-    ${off ? `<p class="muted" style="font-size:12px;margin:8px 0 0">${s.trial === "offered" ? "它在冬眠，叫醒它再聊" : "今天说够了，明天再聊"}</p>` : `<div class="row" style="margin-top:8px">${REPLIES.map((x) => `<button class="small" data-act="chat" data-v="${x.id}">${x.label}</button>`).join("")}</div>`}
-    ${s.memories.length ? `<h3>它记得的事</h3><ul class="feed">${s.memories.slice(0, 5).map((mm) => `<li><span class="muted">${mm.date.slice(5)}</span> ${mm.text}</li>`).join("")}</ul>` : ""}
+    <div class="chat">${today.map((l) => `<div class="msg ${l.from}">${t(l.text)}</div>`).join("") || '<div class="muted">每天可以跟它说 3 句话。说出口的承诺它会记得，第二天对照你的数据。</div>'}</div>
+    ${off ? `<p class="muted" style="font-size:12px;margin:8px 0 0">今天说够了，明天再聊</p>` : `<div class="row" style="margin-top:8px">${REPLIES.map((x) => `<button class="small" data-act="chat" data-v="${x.id}">${x.label}</button>`).join("")}</div>`}
+    ${s.memories.length ? `<h3>它记得的事</h3><ul class="feed">${s.memories.slice(0, 5).map((mm) => `<li><span class="muted">${mm.date.slice(5)}</span> ${t(mm.text)}</li>`).join("")}</ul>` : ""}
     <p class="muted" style="font-size:12px">原型里是预设回复；正式版用 AI 生成，会结合你的健康数据和记忆。</p>
   </div>`;
 }
@@ -741,7 +757,7 @@ function renderCollection(s: GameState): string {
   const all = [...Object.values(ITEMS).flat(), ...TREASURE_ITEMS];
   const got = all.filter((i) => s.collection[i]);
   return `<div class="card"><h2>收藏册 <span data-num>${got.length}</span> / ${all.length}</h2>
-    <div class="items">${all.map((i) => `<span class="item ${s.collection[i] ? "" : "locked"}" title="${i}">${s.collection[i] ? `${SURPRISE_ICON.item} ${i}${s.collection[i]! > 1 ? ` ×${s.collection[i]}` : ""}` : "？？"}</span>`).join("")}</div>
+    <div class="items">${all.map((i) => `<span class="item ${s.collection[i] ? "" : "locked"}" title="${s.collection[i] ? itemName(i) : "还没找到"}">${s.collection[i] ? `${SURPRISE_ICON.item} ${itemName(i)}${s.collection[i]! > 1 ? ` ×${s.collection[i]}` : ""}` : "？？"}</span>`).join("")}</div>
     <p class="muted" style="font-size:12px">没遇到野怪的早上会捡到小东西，跟昨天最突出的那件事有关；最后 ${TREASURE_ITEMS.length} 件只能从藏宝图的宝箱里开出来。只是收藏，不加战斗力。</p>
     <h3>会的动作</h3>
     <p>${s.moves.length ? s.moves.map((mv) => MOVE_NAME[mv]).join("、") : '<span class="muted">还没学会，过几天看看</span>'}</p>
@@ -798,7 +814,7 @@ function renderFriends(s: GameState): string {
         <div><b>${f.name}</b> ${typesHtml(fs.pet)} <span class="pill">${rarityLabel(fs.pet.rarity)}</span></div>
         <div class="muted">${stage} · 战绩 ${wins} 胜 ${rec.length - wins} 负</div>
         ${matchupHint(s, fs)}
-      </div>${done ? `<span class="muted friend-done">今天切磋过了 ✓${lastFriendReplay?.theirName === f.name ? '<button class="small" data-act="replay-friend">看回放</button>' : ""}</span>` : s.trial === "offered" ? "" : `<button class="small primary" data-act="friend" data-v="${f.id}">切磋</button>`}</div>`;
+      </div>${done ? `<span class="muted friend-done">今天切磋过了 ✓${lastFriendReplay?.theirName === f.name ? '<button class="small" data-act="replay-friend">看回放</button>' : ""}</span>` : `<button class="small primary" data-act="friend" data-v="${f.id}">切磋</button>`}</div>`;
     }).join("")}
     <p class="muted" style="font-size:12px">打的是好友宠物的"快照"（它昨天同步时的样子），对方不用在线。原型里的三位好友是模拟出来的不同生活习惯的人。你的好友码：PL-${s.userId.slice(-4).toUpperCase()}</p>
   </div>`;
@@ -868,7 +884,7 @@ function renderDev(s: GameState): string {
     <label><span>戴着睡觉</span><input type="checkbox" data-slider="night" ${sliders.night ? "checked" : ""}/><span class="muted" style="font-size:12px">不戴 = 晚上在充电，按普通的一晚算</span></label>
     ${SLIDERS.map((d) => `<label><span>${d.label}</span><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${sliders[d.key]}" data-slider="${d.key}"/><span data-out="${d.key}">${d.fmt(sliders[d.key])}</span></label>`).join("")}
     <div class="row" style="margin-top:6px"><span class="muted" style="font-size:12px">模拟刚完成一次运动：</span><button class="small" data-act="workout" data-v="cardio:30">跑步 30 分钟</button><button class="small" data-act="workout" data-v="strength:40">力量 40 分钟</button><button class="small" data-act="workout" data-v="hiit:20">间歇 20 分钟</button></div>
-    <div class="row" style="margin-top:10px"><button class="primary" data-act="live">过完这一天</button><button data-act="ff">按"${PERSONA_NAME[(s.persona ?? "walker") as PersonaId]}"快进 7 天</button></div>
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="live" ${serverBusy ? "disabled" : ""}>${serverBusy ? "同步中…" : "过完这一天"}</button><button data-act="ff" ${serverBusy ? "disabled" : ""}>按"${PERSONA_NAME[(s.persona ?? "walker") as PersonaId]}"快进 7 天</button></div>
     <h3>昨天的回响（跟自己平时比，−1 到 +1）</h3>
     <div class="row">${Object.entries(s.lastEchoes).map(([t, v]) => `<span class="pill">${TYPE_NAME[t as ElementType]} ${(v as number) >= 0 ? "+" : ""}${(v as number).toFixed(2)}</span>`).join("") || '<span class="muted">还没有</span>'}</div>
     <h3>一天的作息</h3>
@@ -877,7 +893,8 @@ function renderDev(s: GameState): string {
     <h3>辅助功能</h3>
     <label style="grid-template-columns:auto 1fr"><input type="checkbox" data-a11y="reduce" ${forceReduce ? "checked" : ""}/><span>模拟"减弱动态效果"（系统设置开了也会生效）</span></label>
     <h3>原型说明</h3>
-    <p class="muted" style="font-size:12px">游戏规则全部来自 packages/engine（和服务器以后用的是同一套）。宠物说的话是模板，以后换成 AI。进度存在浏览器里。</p>
+    <p class="muted" style="font-size:12px">游戏规则全部来自 packages/engine（和服务器以后用的是同一套）。宠物说的话是模板，以后换成 AI。${serverBase ? `<b>服务器模式</b>：进度存在 ${serverBase}，每一步都走真实接口（好友切磋还没上服务器，只在本地算）。` : "进度存在浏览器里。"}</p>
+    ${liveConfig ? `<p class="muted" style="font-size:12px">远程配置：${liveConfig.version}${Object.keys(liveConfig.experiments).length ? `<br>你的实验分组：${Object.entries(liveConfig.experiments).map(([k, v]) => `${k} = ${v}`).join("，")}` : ""}</p>` : ""}
     <button class="small danger" data-act="reset" data-v="已重新开始">重新开始</button>
   </div>`;
 }
@@ -906,21 +923,41 @@ function renderLetter(s: GameState): string {
   return `<div class="modal-bg" data-key="m-letter" data-close="close-letter" data-exit><div class="modal letter" role="dialog" aria-modal="true">
     <h2>来自你的 Pulseling · ${l.date.slice(5)}</h2>
     <div class="row" style="justify-content:center">${canvas(petSpec(s.pet))}</div>
-    <p style="white-space:pre-wrap">${l.text}</p>
+    <p style="white-space:pre-wrap">${t(l.text)}</p>
     <div class="row" style="justify-content:flex-end"><button class="small primary" data-act="close-letter">收好</button></div>
   </div></div>`;
 }
 
-function renderPaywall(s: GameState): string {
-  const st = status(s);
-  return `<div class="modal-bg" data-key="m-paywall" data-close="trial-later" data-exit><div class="modal stack" role="dialog" aria-modal="true" style="text-align:center">
-    <h2>它想继续长大</h2>
-    <div>${canvas(petSpec(s.pet, undefined, "juvenile"), "silhouette")}</div>
-    <p>进化进度 ${pct(Math.min(1, st.progress / st.threshold))}，它会变成这样……</p>
-    <p class="muted">开启 7 天免费试用，陪它继续长大。试用结束前一天提醒你，可以随时取消。</p>
-    <button class="primary" data-act="trial-start">开启 7 天免费试用</button>
-    <button data-act="trial-later">暂时不用（它会冬眠，不会消失）</button>
-  </div></div>`;
+/** A running event, in the pet's world: what's different and until when. Comes from the server's remote config. */
+function renderEvents(s: GameState): string {
+  return liveEvents
+    .filter((e) => e.start <= s.today && s.today <= e.end)
+    .map((e) => `<div class="card event" data-key="event-${e.id}"><span class="event-tag">限时活动</span><p>${e.text}</p><span class="muted">到 ${e.end.slice(5).replace("-", " 月 ")} 日</span></div>`)
+    .join("");
+}
+
+const INVITE_COPY: Record<TrialInvite, { title: string; text: string }> = {
+  talk: { title: "它有好多话想说……", text: "开启试用，让它开口说话：抬腕时说一句，每天跟你聊 3 句，还记得你说过的话。" },
+  letter: { title: "想看它亲手写的信吗？", text: "周报卡片一直都有。开启试用，每周还会收到它写给你的一封完整来信。" },
+  evolve: { title: "它想跟你讲讲这两周", text: "开启试用，听它讲讲这次进化背后，你都做了什么。" },
+};
+
+/**
+ * Plus invitation (06): a card on the Today tab, never a wall. It comes back at most once every 3 days, and
+ * "以后再说" puts it away without any cost: the pet keeps growing either way.
+ */
+function renderInvite(s: GameState): string {
+  const invite = trialInvite(s);
+  if (!invite || (invitePutAway?.date === s.today && invitePutAway.invite === invite)) return "";
+  if (lastInviteShown && lastInviteShown !== s.today && daysBetween(lastInviteShown, s.today) < 3) return "";
+  lastInviteShown = s.today;
+  const c = INVITE_COPY[invite];
+  return `<div class="card invite" data-key="invite-${invite}" data-exit>
+    <div class="invite-head">${canvas(petSpec(s.pet, undefined, undefined, "happy"), "invite-pet")}<h2>${c.title}</h2></div>
+    <p>${c.text}</p>
+    <div class="row"><button class="primary" data-act="trial-start">开启 7 天免费试用</button><button data-act="trial-later" data-v="${invite}">以后再说</button></div>
+    <p class="muted" style="font-size:12px;margin:0">不开也照常长大，所有进化和图鉴都在。试用结束前一天提醒你，随时可以取消。</p>
+  </div>`;
 }
 
 function eventText(e: BattleEvent, mine: string, theirs: string): string {
@@ -1052,7 +1089,6 @@ function render() {
         <div><div class="tabs" role="tablist">${(["today", "pet", "dex", "battle", "data"] as Tab[]).map((t) => `<button class="seg ${tab === t ? "on" : ""}" role="tab" aria-selected="${tab === t}" data-act="tab" data-v="${t}">${{ today: "今天", pet: "宠物", dex: "图鉴", battle: "对战", data: "数据" }[t]}</button>`).join("")}</div><div class="tab-body" data-key="tab-${tab}">${body}</div></div>
         ${renderDev(s)}
       </div>
-      ${s.trial === "offered" && !replay && !paywallHidden ? renderPaywall(s) : ""}
       ${renderCharge()}
       ${renderReplay()}
       ${openLetter ? renderLetter(s) : ""}
@@ -1104,7 +1140,7 @@ function drawAll() {
 function queueShows(prev: GameState | null, s: GameState) {
   const pet = s.pet;
   if (!prev) {
-    queueShow({ kind: "hatch", egg: { primary: pet.starter, stage: "egg" }, pet: petSpec(pet), title: `孵化了！${TYPE_NAME[pet.starter]}系 · ${rarityLabel(pet.rarity)}`, lines: [hatchLine(pet.personality, s.facts), `性格：${PERSONALITY_NAME[pet.personality]}`] });
+    queueShow({ kind: "hatch", egg: { primary: pet.starter, stage: "egg" }, pet: petSpec(pet), title: `孵化了！${TYPE_NAME[pet.starter]}系 · ${rarityLabel(pet.rarity)}`, lines: [t(hatchLine(pet.personality, s.facts)), `性格：${PERSONALITY_NAME[pet.personality]}`] });
     return;
   }
   const rarityUp = pet.rarity !== prev.pet.rarity;
@@ -1124,7 +1160,7 @@ function queueShows(prev: GameState | null, s: GameState) {
 function update(next: GameState | null) {
   if (next && next !== state) queueShows(state, next);
   state = next;
-  if (state) save(state);
+  if (state && !serverBase) save(state);
   if (state?.morning && state.morning.date !== seenMorning) {
     seenMorning = state.morning.date;
     const st = status(state);
@@ -1133,6 +1169,16 @@ function update(next: GameState | null) {
     else showBubble(shortLine(state));
   }
   render();
+}
+
+/** Server mode: run one API call, then show what the server now holds. Errors surface as a toast. */
+function go(call: () => Promise<GameState>, after?: (s: GameState) => void) {
+  if (serverBusy) return;
+  serverBusy = true;
+  render();
+  call()
+    .then((s) => { serverBusy = false; update(s); after?.(s); })
+    .catch((e) => { serverBusy = false; showToast(e instanceof Error ? e.message : "服务器出错了"); });
 }
 
 function openReplay(report: BattleReport, boss: boolean) {
@@ -1155,25 +1201,42 @@ app.addEventListener("click", (ev) => {
       setup.denied = el.dataset.act === "ob-deny";
       setup.pending = newGame(setup.starter, setup.persona, undefined, undefined, setup.denied);
       setup.step = "reading";
+      // Server mode: hatch on the server while the reading animation plays.
+      const hatched = serverBase ? remote.hatch(setup.starter, setup.persona, setup.pending.installDate, setup.pending.history) : null;
+      hatched?.catch(() => undefined); // reported when the animation ends
       render();
       clearTimeout(hatchTimer);
       hatchTimer = setTimeout(() => {
         const next = setup.pending;
         setup = { ...setup, step: "egg", pending: null };
-        if (next) update(next);
+        if (hatched) go(() => hatched, () => void refreshConfig());
+        else if (next) update(next);
       }, 3600);
       return;
     }
     case "tab": tab = v as Tab; return render();
     case "preset": sliders = { ...PRESETS[v]!.v }; return render();
-    case "live": return update(liveDay(state!, toDayInput(sliders)));
+    case "live": return serverBase ? go(() => remote.live(state!, toDayInput(sliders))) : update(liveDay(state!, toDayInput(sliders)));
     case "ff": {
+      if (serverBase) return go(() => remote.liveMany(state!, (s) => personaDay(s, s.pet.starter, s.today), 7));
       let s = state!;
-      for (let i = 0; i < 7 && s.trial !== "offered"; i++) s = liveDay(s, personaDay(s, s.pet.starter, s.today));
+      for (let i = 0; i < 7; i++) s = liveDay(s, personaDay(s, s.pet.starter, s.today));
       return update(s);
     }
     case "reset": {
       // Happens at once and can be taken back from the toast, instead of a blocking confirm().
+      if (serverBase) {
+        // The server copy is deleted for real (like "delete all data" in the app), so there's nothing to undo.
+        if (serverBusy) return;
+        serverBusy = true;
+        remote.reset().finally(() => {
+          serverBusy = false;
+          tab = "today"; replay = null; openLetter = null; shareOpen = null; dexOpen = null; charging = null;
+          update(null);
+          showToast("已重新开始，服务器上的数据已删除");
+        });
+        return;
+      }
       const prev = state, prevTab = tab;
       clearSave(); tab = "today";
       replay = null; openLetter = null; shareOpen = null; dexOpen = null; charging = null;
@@ -1191,11 +1254,10 @@ app.addEventListener("click", (ev) => {
       return;
     }
     case "charge-cancel": charging = null; return render();
-    case "target": return update(setTarget(state!, (v || undefined) as AdultVariant | undefined));
-    case "evolve": return update(chooseEvolution(state!, v as AdultVariant));
-    case "trial-start": return update(startTrial(state!));
-    case "trial-later": paywallHidden = true; return render();
-    case "wake": paywallHidden = false; return render();
+    case "target": return serverBase ? go(() => remote.target((v || undefined) as AdultVariant | undefined)) : update(setTarget(state!, (v || undefined) as AdultVariant | undefined));
+    case "evolve": return serverBase ? go(() => remote.evolve(v as AdultVariant)) : update(chooseEvolution(state!, v as AdultVariant));
+    case "trial-start": return serverBase ? go(() => remote.trial()) : update(startTrial(state!));
+    case "trial-later": invitePutAway = { date: state!.today, invite: v as TrialInvite }; lastInviteShown = state!.today; return render();
     case "replay-trial": return state?.morning ? openReplay(state.morning.trial, false) : undefined;
     case "replay-boss": return state?.boss ? openReplay(state.boss, true) : undefined;
     case "skip": if (replay) replay.step = replay.report.result.log.length; clearInterval(replayTimer); return render();
@@ -1206,21 +1268,28 @@ app.addEventListener("click", (ev) => {
       const cur = currentLoadout(state!);
       const id = v as SkillId;
       const next = cur.includes(id) ? cur.filter((x) => x !== id) : cur.length < 4 ? [...cur, id] : [...cur.slice(1), id];
+      // Picking skills one by one passes through incomplete sets; only a full set of 4 is saved to the server.
+      if (serverBase && next.length === 4) return go(() => remote.loadout(next, state!.tactic));
       return update(setLoadout(state!, next, state!.tactic));
     }
-    case "tactic": return update(setLoadout(state!, currentLoadout(state!), v as Tactic));
+    case "tactic": return serverBase ? go(() => remote.loadout(currentLoadout(state!), v as Tactic)) : update(setLoadout(state!, currentLoadout(state!), v as Tactic));
     case "chat": {
-      const label = REPLIES.find((x) => x.id === v)?.label ?? v;
-      const next = chat(state!, v as ReplyId, label);
+      const said = (next: GameState) => {
+        const lastLine = next.chat.log[next.chat.log.length - 1];
+        if (lastLine?.from === "pet") {
+          const text = t(lastLine.text);
+          showBubble(text.length > 12 ? text.slice(0, 11) + "…" : text);
+          render();
+        }
+      };
+      if (serverBase) return go(() => remote.chat(v as ReplyId), said);
+      const next = chat(state!, v as ReplyId);
+      const changed = next !== state;
       update(next);
-      const lastLine = next.chat.log[next.chat.log.length - 1];
-      if (lastLine?.from === "pet" && next !== state) {
-        showBubble(lastLine.text.length > 12 ? lastLine.text.slice(0, 11) + "…" : lastLine.text);
-        render();
-      }
+      if (changed) said(next);
       return;
     }
-    case "letter": openLetter = v; return update(readLetter(state!, v));
+    case "letter": openLetter = v; return serverBase ? go(() => remote.readLetter(v)) : update(readLetter(state!, v));
     case "close-letter": openLetter = null; return render();
     case "pet-tap": break;
     case "aod": aod = !aod; return render();
@@ -1268,13 +1337,17 @@ app.addEventListener("click", (ev) => {
       const onWatch = charging.onWatch;
       if (charging.friendId === BOSS_ID) {
         charging = null;
+        const showBoss = (next: GameState) => {
+          const b = next.boss!;
+          const bossReplay: ReplayState = { report: b, boss: true, step: 0, mine: petSpec(next.pet), theirs: opponentSpec(b, true), title: `周 Boss · 蓄力 ${Math.round(charge * 100)}%` };
+          if (onWatch) watchResult = b.result.winner === "a" ? "赢了 Boss！" : "Boss 好强…";
+          else replay = bossReplay;
+          render();
+        };
+        if (serverBase) return go(() => remote.boss(charge), showBoss);
         const next = fightBoss(state, charge);
-        const b = next.boss!;
         update(next);
-        const bossReplay: ReplayState = { report: b, boss: true, step: 0, mine: petSpec(next.pet), theirs: opponentSpec(b, true), title: `周 Boss · 蓄力 ${Math.round(charge * 100)}%` };
-        if (onWatch) watchResult = b.result.winner === "a" ? "赢了 Boss！" : "Boss 好强…";
-        else replay = bossReplay;
-        return render();
+        return showBoss(next);
       }
       charging = null;
       const other = friendState(state, f);
@@ -1403,3 +1476,11 @@ setMorphReducedMotion(reduceMotion);
 applyReduceMotion();
 matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => { applyReduceMotion(); render(); });
 render();
+if (serverBase) {
+  serverBusy = true;
+  remote
+    .load()
+    .then((s) => { serverBusy = false; state = s; seenMorning = s?.morning?.date ?? null; render(); })
+    .then(refreshConfig)
+    .catch((e) => { serverBusy = false; showToast(e instanceof Error ? e.message : "连不上服务器"); render(); });
+}

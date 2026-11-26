@@ -398,3 +398,14 @@ body.reduce .pop { animation: none !important; opacity: 1; }
   .choice { padding: 6px; }
   .dev label { grid-template-columns: 64px 1fr 56px; }
 }
+
+/* Plus invitation: a card that sits in the flow, never a wall (06). */
+.card.invite { border-color: var(--hl-line); background: var(--hl-bg); display: grid; gap: 10px; }
+.card.invite p { margin: 0; }
+.invite-head { display: flex; align-items: center; gap: 10px; }
+.invite-head h2 { margin: 0; }
+.invite-pet { width: 40px; height: 40px; flex: none; image-rendering: pixelated; }
+/* A running event from the remote config. */
+.card.event { display: grid; gap: 4px; }
+.card.event p { margin: 0; }
+.event-tag { justify-self: start; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--hl-bg); border: 1px solid var(--hl-line); }

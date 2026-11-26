@@ -7,7 +7,6 @@ import { fightBoss, fightFriend, FRIENDS, friendState, liveDay, newGame, persona
 /** Play n days with a persona's simulated data, accepting the trial and the first met adult form. */
 function play(s: GameState, days: number, each?: (s: GameState) => void): GameState {
   for (let i = 0; i < days; i++) {
-    if (s.trial === "offered") s = startTrial(s);
     s = liveDay(s, personaDay(s, s.pet.starter, s.today));
     each?.(s);
   }

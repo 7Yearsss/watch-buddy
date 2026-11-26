@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays, type DailyHealth } from "@pulseling/engine";
-import { createGame, liveDay, migrate, pickWish, startTrial, wishKept, WISH_CHANCE, WISH_GROWTH, type GameState, type Wish } from "../src";
+import { createGame, liveDay, migrate, pickWish, raw, startTrial, wishKept, WISH_CHANCE, WISH_GROWTH, type GameState, type Wish } from "../src";
 
 const day = (i: number, over: Partial<DailyHealth> = {}): Omit<DailyHealth, "date"> => ({
   worn: true, steps: 6000 + (i % 5) * 800, standHours: 10, activeEnergyKcal: 420, flightsClimbed: 6,
@@ -12,7 +12,6 @@ const history = (n: number, over: Partial<DailyHealth> = {}) => Array.from({ len
 const newGame = (id = "u1") => createGame({ userId: id, starter: "fire", installDate: start, history: history(28) });
 const play = (s: GameState, n: number) => {
   for (let i = 0; i < n; i++) {
-    if (s.trial === "offered") s = startTrial(s);
     s = liveDay(s, day(i));
   }
   return s;
@@ -60,10 +59,10 @@ describe("daily wishes", () => {
 
   it("checks each kind against the day's data", () => {
     const d = { date: start, ...day(0, { steps: 9000, bedtimeMinutes: -60, flightsClimbed: 3 }) };
-    expect(wishKept({ date: start, kind: "walk", target: 8000, text: "", short: "" }, d)).toBe(true);
-    expect(wishKept({ date: start, kind: "early", target: -50, text: "", short: "" }, d)).toBe(true);
-    expect(wishKept({ date: start, kind: "stairs", target: 5, text: "", short: "" }, d)).toBe(false);
-    expect(wishKept({ date: start, kind: "walk", target: 8000, text: "", short: "" }, { ...d, worn: false })).toBe(false);
+    expect(wishKept({ date: start, kind: "walk", target: 8000, text: raw(""), short: raw("") }, d)).toBe(true);
+    expect(wishKept({ date: start, kind: "early", target: -50, text: raw(""), short: raw("") }, d)).toBe(true);
+    expect(wishKept({ date: start, kind: "stairs", target: 5, text: raw(""), short: raw("") }, d)).toBe(false);
+    expect(wishKept({ date: start, kind: "walk", target: 8000, text: raw(""), short: raw("") }, { ...d, worn: false })).toBe(false);
   });
 });
 
@@ -92,7 +91,7 @@ describe("random events that change tomorrow", () => {
       const s = play(newGame(`luck${k}`), 1);
       const tomorrow = addDays(s.today, 1);
       if (liveDay(s, day(1)).morning?.encounter) plain++;
-      if (liveDay({ ...s, tomorrow: { date: tomorrow, luck: "流星雨" } }, day(1)).morning?.encounter) lucky++;
+      if (liveDay({ ...s, tomorrow: { date: tomorrow, luck: "meteor" } }, day(1)).morning?.encounter) lucky++;
     }
     expect(lucky).toBeGreaterThan(plain);
   });

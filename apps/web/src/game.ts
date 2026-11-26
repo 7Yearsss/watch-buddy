@@ -71,7 +71,6 @@ export function friendState(s: GameState, f: Friend): GameState {
   if (hit) return hit;
   let fs = newGame(f.starter, f.persona, s.installDate, `${f.id}-${s.installDate}`);
   while (fs.today < s.today) {
-    if (fs.trial === "offered") fs = startTrial(fs);
     fs = liveDay(fs, personaDay(fs, f.starter, fs.today));
     fs = friendPicksEvolution(fs);
   }

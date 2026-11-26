@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Game API (docs/design/10, 11). Live at https://api.pulseling.workers.dev
+  "name": "api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  // New anonymous accounts: 5 per IP per minute (approximate, per Cloudflare location).
+  "ratelimits": [{ "name": "ACCOUNTS_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pulseling",
+      "database_id": "61a58129-b3e7-484d-a525-a619b3117c3e",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

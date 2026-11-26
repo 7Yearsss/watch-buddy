@@ -1,0 +1,17 @@
+{
+  "events": [
+    {
+      "id": "first-snow-2026",
+      "text": {
+        "zh": "初雪周：水系野怪变多了，遇到野怪的机会也多了一半",
+        "en": "First Snow Week: more Water-type monsters, and half again the chance to meet one"
+      },
+      "start": "2026-11-20",
+      "end": "2026-12-10",
+      "effect": {
+        "weather": "water",
+        "encounterChance": 1.5
+      }
+    }
+  ]
+}

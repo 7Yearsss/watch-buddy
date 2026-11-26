@@ -5,9 +5,10 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p packages/engine --noEmit && tsc -p packages/game --noEmit && tsc -p apps/sim --noEmit && tsc -p apps/web --noEmit",
+    "typecheck": "tsc -p packages/engine --noEmit && tsc -p packages/game --noEmit && tsc -p apps/sim --noEmit && tsc -p apps/web --noEmit && tsc -p apps/server --noEmit",
     "sim": "pnpm --filter @pulseling/sim sim",
-    "web": "pnpm --filter @pulseling/web dev"
+    "web": "pnpm --filter @pulseling/web dev",
+    "server": "pnpm --filter @pulseling/server dev"
   },
   "devDependencies": {
     "@types/node": "22.10.2",

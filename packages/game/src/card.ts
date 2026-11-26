@@ -1,8 +1,9 @@
 import type { EchoType, Stat } from "@pulseling/engine";
 import type { GameState } from "./state";
-import { speciesName, STAT_NAME } from "./text";
-import { SURPRISE_ICON, SURPRISE_LABEL } from "./surprise";
-import { WISH_LABEL, wishResultLine } from "./wish";
+import { speciesMsg } from "./text";
+import { SURPRISE_ICON } from "./surprise";
+import { wishResultLine } from "./wish";
+import { msg, t, type Locale, type Msg } from "./i18n";
 
 /** The morning card (07 §1): last night → yesterday's highlights → growth → surprise. At most 3 numbers. */
 export interface MorningCard {
@@ -29,23 +30,13 @@ const STAT_OF: Record<EchoType, Stat> = {
 };
 
 /** What the player did, said relative to themselves — never an absolute ranking. */
-function action(t: EchoType, strong: boolean): string {
-  const more = strong ? "比平时多很多" : "比平时多";
-  switch (t) {
-    case "grass": return `走路${more}`;
-    case "water": return strong ? "睡得比平时好很多" : "睡得比平时好";
-    case "shadow": return "深睡比平时足";
-    case "fire": return `活动量${more}`;
-    case "fighting": return `力量训练${more}`;
-    case "flying": return `有氧运动${more}`;
-    case "electric": return `高强度运动${more}`;
-    case "ground": return `爬楼${more}`;
-  }
-}
+const action = (type: EchoType, strong: boolean): Msg => msg(`card.act.${type}${strong ? ".strong" : ""}`);
 
-const hm = (min: number) => `${Math.floor(min / 60)} 时 ${String(min % 60).padStart(2, "0")} 分`;
+const hm = (min: number): Msg => msg("card.hm", { h: Math.floor(min / 60), m: String(min % 60).padStart(2, "0") });
 
-export function morningCard(s: GameState, progress: number, threshold: number): MorningCard | null {
+/** The card as text in one language. It is built at read time from the stored morning, so it is never stored itself. */
+export function morningCard(s: GameState, progress: number, threshold: number, locale: Locale = "zh"): MorningCard | null {
+  const T = (x: Msg) => t(x, locale);
   const m = s.morning;
   const day = s.history[s.history.length - 1];
   const result = s.results[s.results.length - 1];
@@ -54,8 +45,8 @@ export function morningCard(s: GameState, progress: number, threshold: number): 
   const sleep = day.worn ? day.sleepMinutes : undefined;
   const night: MorningCard["night"] =
     sleep === undefined
-      ? { icon: "none", text: "昨晚手表在充电，按普通的一晚算" }
-      : { icon: sleep >= 420 ? "good" : sleep >= 360 ? "ok" : "short", text: hm(sleep) };
+      ? { icon: "none", text: T(msg("card.night.none")) }
+      : { icon: sleep >= 420 ? "good" : sleep >= 360 ? "ok" : "short", text: T(hm(sleep)) };
 
   const ranked = (Object.entries(result.echoes) as [EchoType, number][])
     .filter(([, v]) => v > 0.15)
@@ -64,34 +55,35 @@ export function morningCard(s: GameState, progress: number, threshold: number): 
   const highlights = ranked.map(([t, v], i) => {
     const stat = STAT_OF[t];
     const gain = Math.round(result.statGains[stat]);
-    return `${action(t, v > 0.5)} → ${STAT_NAME[stat]}${i === 0 ? ` +${gain}` : " ↑"}`;
+    return T(msg(i === 0 ? "card.highlight.first" : "card.highlight.next", { act: action(t, v > 0.5), stat: msg(`stat.${stat}`), gain }));
   });
   if (!highlights.length) {
     // Never an empty card, never a scolding one.
-    highlights.push(day.worn ? `戴着手表陪了我一整天 → 成长不停` : "昨天没戴手表，我自己玩了一天");
+    highlights.push(T(msg(day.worn ? "card.worn" : "card.unworn")));
   }
 
   const gain = Math.round(result.gain);
   const to = threshold ? Math.min(1, progress / threshold) : 1;
   const from = threshold ? Math.max(0, (progress - result.gain) / threshold) : 1;
 
-  const name = speciesName(m.trial.opponentName);
+  const name = speciesMsg(m.trial.opponentName);
   const sp = m.surprise;
+  const wild = T(msg("card.wild"));
   const surprise: MorningCard["surprise"] = !m.encounter
     ? sp
-      ? { kind: "small", label: `${SURPRISE_ICON[sp.kind]} ${SURPRISE_LABEL[sp.kind]}`, text: sp.text, short: sp.short }
-      : { kind: "small", label: "惊喜", text: "附近很安静", short: "附近很安静" }
+      ? { kind: "small", label: `${SURPRISE_ICON[sp.kind]} ${T(msg(`surprise.${sp.kind}`))}`, text: T(sp.text), short: T(sp.short) }
+      : { kind: "small", label: T(msg("card.quiet.label")), text: T(msg("card.quiet")), short: T(msg("card.quiet")) }
     : m.newSpecies
-      ? { kind: "capture", label: "遇到野怪", text: `收服了${name}！`, short: `收服了${name}！` }
+      ? { kind: "capture", label: wild, text: T(msg("card.captured", { name })), short: T(msg("card.captured", { name })) }
       : m.captured
-        ? { kind: "seen", label: "遇到野怪", text: `又碰到了${name}`, short: `又碰到${name}` }
-        : { kind: "escaped", label: "遇到野怪", text: `${name}跑掉了，图鉴里留下了剪影`, short: `${name}跑掉了` };
+        ? { kind: "seen", label: wild, text: T(msg("card.seen", { name })), short: T(msg("card.seen.short", { name })) }
+        : { kind: "escaped", label: wild, text: T(msg("card.escaped", { name })), short: T(msg("card.escaped.short", { name })) };
 
   const extras: MorningCard["extras"] = [];
-  if (m.wishResult) extras.push({ text: wishResultLine(m.wishResult).text, good: !!m.wishResult.kept });
-  if (m.treasure) extras.push({ text: `宝箱打开了！得到「${m.treasure.item}」，成长值 +${m.treasure.growth}`, good: true });
-  for (const b of m.boosts ?? []) extras.push({ text: b, good: true });
-  const wish = m.wish ? { label: WISH_LABEL[m.wish.kind], text: m.wish.text, short: m.wish.short } : undefined;
+  if (m.wishResult) extras.push({ text: T(wishResultLine(m.wishResult).text), good: !!m.wishResult.kept });
+  if (m.treasure) extras.push({ text: T(msg("card.treasure", { item: msg(`item.${m.treasure.item}`), n: m.treasure.growth })), good: true });
+  for (const b of m.boosts ?? []) extras.push({ text: T(b), good: true });
+  const wish = m.wish ? { label: T(msg(`wish.${m.wish.kind}`)), text: T(m.wish.text), short: T(m.wish.short) } : undefined;
 
   return { date: m.date, night, highlights, headline: highlights[0]!, gain, from, to, surprise, extras, wish };
 }
